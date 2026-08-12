@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-
+ 
 const STORAGE_KEY = 'skolni-trenink'
-
+ 
 const defaultState = {
   stars: 0,
   coins: 0,
@@ -10,12 +10,15 @@ const defaultState = {
   dailyCorrect: 0,
   dailyGoal: 30,
   difficulty: 'advanced',
-  errorLog: [],       // [{question, correct, type, count, lastSeen}]
+  errorLog: [],
   totalRounds: 0,
   totalCorrect: 0,
   totalAnswered: 0,
+  // Time tracking: { "2026-08-12": 345 } (seconds per day)
+  dailyTime: {},
+  sessionStart: null,
 }
-
+ 
 export function useProgress() {
   const [progress, setProgress] = useState(() => {
     try {
@@ -27,33 +30,30 @@ export function useProgress() {
     } catch (e) {}
     return { ...defaultState }
   })
-
+ 
   // Save to localStorage whenever progress changes
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(progress))
     } catch (e) {}
   }, [progress])
-
+ 
   // Check streak on load
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10)
     const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
-
+ 
     if (progress.lastActiveDate === today) {
-      // Already active today, do nothing
       return
     }
-
+ 
     if (progress.lastActiveDate === yesterday) {
-      // Continue streak, reset daily counter
       setProgress(p => ({ ...p, dailyCorrect: 0 }))
     } else if (progress.lastActiveDate && progress.lastActiveDate !== today) {
-      // Streak broken (more than 1 day gap)
       setProgress(p => ({ ...p, streak: 0, dailyCorrect: 0 }))
     }
   }, [])
-
+ 
   const addCorrect = (earnedStars, earnedCoins) => {
     const today = new Date().toISOString().slice(0, 10)
     setProgress(p => {
@@ -61,7 +61,7 @@ export function useProgress() {
       const wasGoalMet = p.dailyCorrect >= p.dailyGoal
       const isGoalMet = newDailyCorrect >= p.dailyGoal
       const streakInc = (!wasGoalMet && isGoalMet && p.lastActiveDate !== today) ? 1 : 0
-
+ 
       return {
         ...p,
         stars: p.stars + earnedStars,
@@ -74,7 +74,7 @@ export function useProgress() {
       }
     })
   }
-
+ 
   const addWrong = () => {
     const today = new Date().toISOString().slice(0, 10)
     setProgress(p => ({
@@ -83,12 +83,13 @@ export function useProgress() {
       lastActiveDate: today,
     }))
   }
-
+ 
   const addRound = () => {
     setProgress(p => ({ ...p, totalRounds: p.totalRounds + 1 }))
   }
-
+ 
   const addError = (question) => {
+    if (!question) return
     setProgress(p => {
       const key = question.display + '|' + question.correct
       const existing = p.errorLog.find(e => e.key === key)
@@ -108,28 +109,70 @@ export function useProgress() {
           lastSeen: Date.now(),
         }]
       }
-      // Keep only last 100 errors
       if (newLog.length > 100) {
         newLog = newLog.sort((a, b) => b.lastSeen - a.lastSeen).slice(0, 100)
       }
       return { ...p, errorLog: newLog }
     })
   }
-
+ 
   const setDifficulty = (d) => {
     setProgress(p => ({ ...p, difficulty: d }))
   }
-
+ 
   const spendCoins = (amount) => {
     if (progress.coins < amount) return false
     setProgress(p => ({ ...p, coins: p.coins - amount }))
     return true
   }
-
+ 
+  // Time tracking
+  const startSession = () => {
+    setProgress(p => ({ ...p, sessionStart: Date.now() }))
+  }
+ 
+  const endSession = () => {
+    setProgress(p => {
+      if (!p.sessionStart) return p
+      const elapsed = Math.round((Date.now() - p.sessionStart) / 1000)
+      const today = new Date().toISOString().slice(0, 10)
+      const prevTime = p.dailyTime[today] || 0
+      return {
+        ...p,
+        sessionStart: null,
+        dailyTime: { ...p.dailyTime, [today]: prevTime + elapsed },
+      }
+    })
+  }
+ 
+  const getTodayTime = () => {
+    const today = new Date().toISOString().slice(0, 10)
+    return progress.dailyTime[today] || 0
+  }
+ 
+  const getWeekTime = () => {
+    const now = new Date()
+    let total = 0
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now)
+      d.setDate(d.getDate() - i)
+      const key = d.toISOString().slice(0, 10)
+      total += progress.dailyTime[key] || 0
+    }
+    return total
+  }
+ 
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    if (m === 0) return `${s}s`
+    return `${m}m ${s}s`
+  }
+ 
   const resetProgress = () => {
     setProgress({ ...defaultState })
   }
-
+ 
   return {
     progress,
     addCorrect,
@@ -138,6 +181,11 @@ export function useProgress() {
     addError,
     setDifficulty,
     spendCoins,
+    startSession,
+    endSession,
+    getTodayTime,
+    getWeekTime,
+    formatTime,
     resetProgress,
   }
 }
