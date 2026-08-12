@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { CATS, MOTIVACE, SPATNE, ROUND_SIZE } from "./data/constants";
 import { generateQuestions } from "./utils/questions";
-import { glass, glassStrong, glassBadge, bgStyle, wrapStyle, BgBlobs } from "./utils/styles.jsx";
+import { glass, glassStrong, glassBadge, bgStyle, wrapStyle, BgBlobs } from "./utils/styles";
 import { useProgress } from "./hooks/useProgress";
 import { initAudio, playCorrect, playWrong, playTimeout, playResultGreat, playResultOk, playResultBad } from "./utils/sounds";
 import TimerRing from "./components/TimerRing";
@@ -14,7 +14,7 @@ import ConfettiBurst from "./components/ConfettiBurst";
 // ── MAIN APP ────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const { progress, addCorrect, addWrong, addRound, addError, setDifficulty: setDiff, spendCoins } = useProgress();
+  const { progress, addCorrect, addWrong, addRound, addError, setDifficulty: setDiff, spendCoins, startSession, endSession, getTodayTime, getWeekTime, formatTime } = useProgress();
   const [soundOn, setSoundOn] = useState(true);
   const [screen, setScreen] = useState("dashboard");
   const [activeCats, setActiveCats] = useState(["vyjna"]);
@@ -37,6 +37,7 @@ export default function App() {
   const hintRef = useRef(null);
   const skipRef = useRef(null);
   const qRef = useRef(0);
+  const roundCounted = useRef(false);
 
   // Shortcuts to persisted values
   const stars = progress.stars;
@@ -119,6 +120,23 @@ export default function App() {
     return () => clearTimers();
   }, [qIdx, screen]);
 
+  // Track results and play sounds (must be before conditional returns)
+  useEffect(() => {
+    if (screen === "results" && results.length > 0 && !roundCounted.current) {
+      roundCounted.current = true;
+      addRound();
+      endSession();
+      const pct = Math.round((results.filter(r => r.isCorrect).length / ROUND_SIZE) * 100);
+      if (soundOn) {
+        setTimeout(() => {
+          if (pct >= 80) playResultGreat();
+          else if (pct >= 50) playResultOk();
+          else playResultBad();
+        }, 300);
+      }
+    }
+  }, [screen, results]);
+
   const handleAnswer = (idx) => {
     if (answered !== null) return;
     clearTimers();
@@ -177,6 +195,9 @@ export default function App() {
 
   const startRound = () => {
     if (activeCats.length === 0) return;
+    initAudio();
+    startSession();
+    roundCounted.current = false;
     const qs = generateQuestions(activeCats, difficulty);
     setQuestions(qs);
     setQIdx(0);
@@ -282,7 +303,7 @@ export default function App() {
           {/* Daily goal */}
           <div style={{
             ...glassStrong,
-            borderRadius: 20, padding: "16px 20px", marginBottom: 24,
+            borderRadius: 20, padding: "16px 20px", marginBottom: 12,
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700 }}>
               <span>🎯 Dnešní cíl</span>
@@ -298,6 +319,23 @@ export default function App() {
                 background: "linear-gradient(90deg,#FFD166,#FF6B35)",
                 transition: "width .5s ease",
               }} />
+            </div>
+          </div>
+
+          {/* Time tracking */}
+          <div style={{
+            ...glass,
+            borderRadius: 16, padding: "12px 20px", marginBottom: 24,
+            display: "flex", justifyContent: "space-around",
+          }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "#8892A8", marginBottom: 2 }}>⏱️ Dnes</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#E8ECF4" }}>{formatTime(getTodayTime())}</div>
+            </div>
+            <div style={{ width: 1, background: "rgba(255,255,255,.1)" }} />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "#8892A8", marginBottom: 2 }}>📅 Tento týden</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#E8ECF4" }}>{formatTime(getWeekTime())}</div>
             </div>
           </div>
 
@@ -577,20 +615,6 @@ export default function App() {
   }
 
   // ═════════ RESULTS ═════════
-
-  // Play result sound
-  useEffect(() => {
-    if (screen !== "results" || results.length === 0) return;
-    addRound();
-    const pct = Math.round((results.filter(r => r.isCorrect).length / ROUND_SIZE) * 100);
-    if (soundOn) {
-      setTimeout(() => {
-        if (pct >= 80) playResultGreat();
-        else if (pct >= 50) playResultOk();
-        else playResultBad();
-      }, 300);
-    }
-  }, [screen]);
 
   if (screen === "results") {
     const correct = results.filter(r => r.isCorrect).length;
