@@ -127,22 +127,63 @@ export function useProgress() {
   }
  
   // Time tracking
+  const MAX_SESSION = 15 * 60 // Max 15 minutes per session
+ 
+  const saveSessionTime = (p) => {
+    if (!p.sessionStart) return p
+    const elapsed = Math.min(Math.round((Date.now() - p.sessionStart) / 1000), MAX_SESSION)
+    if (elapsed < 2) return { ...p, sessionStart: null } // Ignore tiny sessions
+    const today = new Date().toISOString().slice(0, 10)
+    const prevTime = p.dailyTime[today] || 0
+    return {
+      ...p,
+      sessionStart: null,
+      dailyTime: { ...p.dailyTime, [today]: prevTime + elapsed },
+    }
+  }
+ 
+  // On load: recover any stale session (app was closed mid-round)
+  useEffect(() => {
+    if (progress.sessionStart) {
+      setProgress(p => saveSessionTime(p))
+    }
+  }, [])
+ 
+  // Auto-save when user leaves the page or switches apps
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        setProgress(p => {
+          if (!p.sessionStart) return p
+          const saved = saveSessionTime(p)
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)) } catch(e) {}
+          return saved
+        })
+      }
+    }
+ 
+    const handleBeforeUnload = () => {
+      const p = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
+      if (p.sessionStart) {
+        const saved = saveSessionTime(p)
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)) } catch(e) {}
+      }
+    }
+ 
+    document.addEventListener('visibilitychange', handleVisibility)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [])
+ 
   const startSession = () => {
     setProgress(p => ({ ...p, sessionStart: Date.now() }))
   }
  
   const endSession = () => {
-    setProgress(p => {
-      if (!p.sessionStart) return p
-      const elapsed = Math.round((Date.now() - p.sessionStart) / 1000)
-      const today = new Date().toISOString().slice(0, 10)
-      const prevTime = p.dailyTime[today] || 0
-      return {
-        ...p,
-        sessionStart: null,
-        dailyTime: { ...p.dailyTime, [today]: prevTime + elapsed },
-      }
-    })
+    setProgress(p => saveSessionTime(p))
   }
  
   const getTodayTime = () => {
@@ -189,3 +230,4 @@ export function useProgress() {
     resetProgress,
   }
 }
+ 
