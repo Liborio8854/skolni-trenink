@@ -210,6 +210,10 @@ export function useProgress() {
     return `${m}m ${s}s`
   }
  
+  const discardSession = () => {
+    setProgress(p => ({ ...p, sessionStart: null }))
+  }
+ 
   const resetProgress = () => {
     setProgress({ ...defaultState })
   }
@@ -224,6 +228,7 @@ export function useProgress() {
     spendCoins,
     startSession,
     endSession,
+    discardSession,
     getTodayTime,
     getWeekTime,
     formatTime,
