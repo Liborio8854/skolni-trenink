@@ -142,39 +142,10 @@ export function useProgress() {
     }
   }
  
-  // On load: recover any stale session (app was closed mid-round)
+  // On load: discard any stale session (app was closed mid-round, unknown success rate)
   useEffect(() => {
     if (progress.sessionStart) {
-      setProgress(p => saveSessionTime(p))
-    }
-  }, [])
- 
-  // Auto-save when user leaves the page or switches apps
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        setProgress(p => {
-          if (!p.sessionStart) return p
-          const saved = saveSessionTime(p)
-          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)) } catch(e) {}
-          return saved
-        })
-      }
-    }
- 
-    const handleBeforeUnload = () => {
-      const p = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
-      if (p.sessionStart) {
-        const saved = saveSessionTime(p)
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)) } catch(e) {}
-      }
-    }
- 
-    document.addEventListener('visibilitychange', handleVisibility)
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibility)
-      window.removeEventListener('beforeunload', handleBeforeUnload)
+      setProgress(p => ({ ...p, sessionStart: null }))
     }
   }, [])
  
