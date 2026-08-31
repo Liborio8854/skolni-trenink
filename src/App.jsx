@@ -14,7 +14,7 @@ import ConfettiBurst from "./components/ConfettiBurst";
 // ── MAIN APP ────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const { progress, addCorrect, addWrong, addRound, addError, setDifficulty: setDiff, spendCoins, startSession, endSession, getTodayTime, getWeekTime, formatTime } = useProgress();
+  const { progress, addCorrect, addWrong, addRound, addError, setDifficulty: setDiff, spendCoins, startSession, endSession, discardSession, getTodayTime, getWeekTime, formatTime } = useProgress();
   const [soundOn, setSoundOn] = useState(true);
   const [screen, setScreen] = useState("dashboard");
   const [activeCats, setActiveCats] = useState(["vyjna"]);
@@ -125,8 +125,14 @@ export default function App() {
     if (screen === "results" && results.length > 0 && !roundCounted.current) {
       roundCounted.current = true;
       addRound();
-      endSession();
       const pct = Math.round((results.filter(r => r.isCorrect).length / ROUND_SIZE) * 100);
+      // Time counts only if success rate > 80%
+      if (pct > 80) {
+        endSession();
+      } else {
+        // Discard session time
+        discardSession();
+      }
       if (soundOn) {
         setTimeout(() => {
           if (pct >= 80) playResultGreat();
