@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { CATS, MOTIVACE, SPATNE, ROUND_SIZE } from "./data/constants";
+import { PRAVOPIS_IY_AN_TEST } from "./data/pravopisIyTest";
+import { getCategory } from "./data/categories";
 import { generateQuestions } from "./utils/questions";
 import { evaluateAnswer } from "./utils/evaluate";
 import { glass, glassStrong, glassBadge, bgStyle, wrapStyle, BgBlobs } from "./utils/styles";
@@ -7,6 +9,7 @@ import { useProgress } from "./hooks/useProgress";
 import { initAudio, playCorrect, playWrong, playTimeout, playResultGreat, playResultOk, playResultBad } from "./utils/sounds";
 import TimerRing from "./components/TimerRing";
 import ConfettiBurst from "./components/ConfettiBurst";
+import AnSvazekQuestion from "./components/AnSvazekQuestion";
 
 /* ════════════════════════════════════════════════════════════════════════════
    ŠKOLNÍ TRÉNINK — v1
@@ -33,11 +36,13 @@ export default function App() {
   const [confetti, setConfetti] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const [answerMs, setAnswerMs] = useState(null);
+  const [lastEval, setLastEval] = useState(null);
   const startRef = useRef(null);
   const timerRef = useRef(null);
   const hintRef = useRef(null);
   const skipRef = useRef(null);
   const qRef = useRef(0);
+  const roundSizeRef = useRef(ROUND_SIZE);
   const roundCounted = useRef(false);
 
   // Shortcuts to persisted values
@@ -60,10 +65,11 @@ export default function App() {
 
   const advanceQuestion = useCallback(() => {
     const nextIdx = qRef.current + 1;
-    if (nextIdx < ROUND_SIZE) {
+    if (nextIdx < roundSizeRef.current) {
       setQIdx(nextIdx);
       qRef.current = nextIdx;
       setAnswered(null);
+      setLastEval(null);
       setFbText("");
       setShowHint(false);
       setShowSkip(false);
@@ -90,7 +96,7 @@ export default function App() {
     setTimeout(advanceQuestion, 1500);
   }, [questions, clearTimers, advanceQuestion, soundOn, addWrong, addError]);
 
-  // Start timers
+  // Start timers (ne u an-svazek — uživatel vyplňuje víc polí)
   useEffect(() => {
     if (screen !== "quiz" || !q || answered !== null) return;
     clearTimers();
@@ -98,6 +104,10 @@ export default function App() {
     setShowSkip(false);
     setAnswerMs(null);
     startRef.current = Date.now();
+
+    if (q.type === "an-svazek") {
+      return () => clearTimers();
+    }
 
     if (hasTimer) {
       const limit = q.timeLimit;
@@ -126,7 +136,8 @@ export default function App() {
     if (screen === "results" && results.length > 0 && !roundCounted.current) {
       roundCounted.current = true;
       addRound();
-      const pct = Math.round((results.filter(r => r.isCorrect).length / ROUND_SIZE) * 100);
+      const size = results.length || roundSizeRef.current;
+      const pct = Math.round((results.filter(r => r.isCorrect).length / size) * 100);
       // Time counts only if success rate > 80%
       if (pct > 80) {
         endSession();
@@ -144,15 +155,14 @@ export default function App() {
     }
   }, [screen, results]);
 
-  const handleAnswer = (idx) => {
-    if (answered !== null) return;
-    clearTimers();
-    initAudio();
+  const applyEvaluation = (evaluation, userAnswerLabel, delayMs = 1200) => {
     const ms = Date.now() - startRef.current;
     setAnswerMs(ms);
-    setAnswered(idx);
+    setLastEval(evaluation);
 
-    const { correct: ok } = evaluateAnswer(q, idx);
+    const { correct: ok, pointsEarned, pointsMax } = evaluation;
+    const partial = !ok && pointsEarned > 0;
+
     if (ok) {
       setConfetti(true);
       setTimeout(() => setConfetti(false), 900);
@@ -174,6 +184,15 @@ export default function App() {
       addCorrect(es, ec);
       setRoundStars(s => s + es);
       setRoundCoins(co => co + ec);
+    } else if (partial) {
+      if (soundOn) playCorrect();
+      setFbText(`Skoro! Získal jsi ${pointsEarned} ze ${pointsMax} bodů.`);
+      setFbOk(true);
+      setCombo(0);
+      addCorrect(5, 5);
+      addError(q);
+      setRoundStars(s => s + 5);
+      setRoundCoins(co => co + 5);
     } else {
       if (soundOn) playWrong();
       setFbText(SPATNE[Math.floor(Math.random() * SPATNE.length)]);
@@ -183,14 +202,43 @@ export default function App() {
       addError(q);
     }
 
-    setResults(prev => [...prev, { ...q, userAnswer: q.options[idx], isCorrect: ok, time: ms }]);
-    setTimeout(advanceQuestion, 1200);
+    setResults(prev => [...prev, {
+      ...q,
+      userAnswer: userAnswerLabel,
+      isCorrect: ok,
+      pointsEarned,
+      pointsMax,
+      time: ms,
+    }]);
+    setTimeout(advanceQuestion, delayMs);
+  };
+
+  const handleAnswer = (idx) => {
+    if (answered !== null) return;
+    clearTimers();
+    initAudio();
+    setAnswered(idx);
+
+    const evaluation = evaluateAnswer(q, idx);
+    applyEvaluation(evaluation, q.options[idx], 1200);
+  };
+
+  const handleAnSvazekAnswer = (userAnswers) => {
+    if (answered !== null) return;
+    clearTimers();
+    initAudio();
+    setAnswered(userAnswers);
+
+    const evaluation = evaluateAnswer(q, userAnswers);
+    const label = `${evaluation.detail.correctCount}/${evaluation.detail.total} správně`;
+    applyEvaluation(evaluation, label, 2800);
   };
 
   const handleSkip = () => {
     clearTimers();
     if (soundOn) playWrong();
     setAnswered(-1);
+    setLastEval(null);
     setFbText("Přeskočeno — půjde do chybníku 📝");
     setFbOk(false);
     setCombo(0);
@@ -200,16 +248,16 @@ export default function App() {
     setTimeout(advanceQuestion, 1200);
   };
 
-  const startRound = () => {
-    if (activeCats.length === 0) return;
+  const beginQuiz = (qs) => {
     initAudio();
     startSession();
     roundCounted.current = false;
-    const qs = generateQuestions(activeCats, difficulty);
+    roundSizeRef.current = qs.length;
     setQuestions(qs);
     setQIdx(0);
     qRef.current = 0;
     setAnswered(null);
+    setLastEval(null);
     setFbText("");
     setResults([]);
     setRoundStars(0);
@@ -218,6 +266,16 @@ export default function App() {
     setShowHint(false);
     setShowSkip(false);
     setScreen("quiz");
+  };
+
+  const startRound = () => {
+    if (activeCats.length === 0) return;
+    beginQuiz(generateQuestions(activeCats, difficulty));
+  };
+
+  /** Dočasný vstup pro vyzkoušení A/N svazku */
+  const startAnSvazekTest = () => {
+    beginQuiz([...PRAVOPIS_IY_AN_TEST]);
   };
 
   const toggleCat = (id) => {
@@ -434,6 +492,26 @@ export default function App() {
           >
             {activeCats.length > 0 ? "🚀  START  🚀" : "Vyber kategorii"}
           </button>
+
+          {/* Dočasný vstup — test formátu A/N svazek */}
+          <button
+            onClick={startAnSvazekTest}
+            style={{
+              ...glass,
+              width: "100%",
+              marginTop: 12,
+              padding: 14,
+              borderRadius: 16,
+              border: "1px dashed rgba(255,255,255,.2)",
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: "pointer",
+              color: "#8892A8",
+              background: "rgba(255,255,255,.03)",
+            }}
+          >
+            🧪 Test A/N svazek (pravopis i/y)
+          </button>
         </div>
       </div>
     );
@@ -442,7 +520,16 @@ export default function App() {
   // ═════════ QUIZ ═════════
 
   if (screen === "quiz" && q) {
-    const catMeta = CATS.find(c => c.id === q.category) || CATS[0];
+    const catFromReg = getCategory(q.category);
+    const catMeta = CATS.find(c => c.id === q.category) || {
+      id: q.category,
+      icon: catFromReg?.icon || "✏️",
+      color: "#E85D3A",
+      label: catFromReg?.name || q.category,
+    };
+    const roundLen = questions.length || roundSizeRef.current;
+    const isAnSvazek = q.type === "an-svazek";
+
     const getState = (idx) => {
       if (answered === null) return null;
       if (idx === q.correctIdx) return "correct";
@@ -508,9 +595,14 @@ export default function App() {
 
           {/* Progress dots */}
           <div style={{ display: "flex", gap: 4, justifyContent: "center", marginBottom: 20 }}>
-            {Array.from({ length: ROUND_SIZE }).map((_, i) => {
+            {Array.from({ length: roundLen }).map((_, i) => {
               let dotBg = "rgba(255,255,255,.1)";
-              if (i < results.length) dotBg = results[i].isCorrect ? "#4ADE80" : "#F87171";
+              if (i < results.length) {
+                const r = results[i];
+                if (r.isCorrect) dotBg = "#4ADE80";
+                else if (r.pointsEarned > 0) dotBg = "#FFD166";
+                else dotBg = "#F87171";
+              }
               if (i === qIdx && answered === null) dotBg = catMeta.color;
               return <div key={i} style={{
                 width: i === qIdx ? 24 : 8, height: 8, borderRadius: 4,
@@ -520,7 +612,7 @@ export default function App() {
           </div>
 
           <div style={{ fontSize: 13, color: "#8892A8", textAlign: "center", marginBottom: 8, fontWeight: 600 }}>
-            {catMeta.icon} Otázka {qIdx + 1} / {ROUND_SIZE}
+            {catMeta.icon} Otázka {qIdx + 1} / {roundLen}
           </div>
 
           {/* Timer */}
@@ -529,44 +621,6 @@ export default function App() {
           )}
 
           {speedBadge}
-
-          {/* Question card */}
-          <div key={qIdx} style={{
-            ...glassStrong,
-            borderRadius: 24,
-            padding: "32px 24px", textAlign: "center", marginBottom: 20,
-            animation: "popIn .4s cubic-bezier(.34,1.56,.64,1)",
-          }}>
-            {(q.category === "nasobilka" || q.category === "pocitani") ? (
-              <div style={{ fontSize: 48, fontWeight: 900, letterSpacing: 3 }}>{q.display}</div>
-            ) : (
-              <>
-                <div style={{ fontSize: 36, fontWeight: 900, letterSpacing: 2, lineHeight: 1.3 }}>
-                  {q.display.split("_").map((part, i, arr) => (
-                    <span key={i}>
-                      {part}
-                      {i < arr.length - 1 && (
-                        <span style={{
-                          display: "inline-block",
-                          borderBottom: `3px solid ${catMeta.color}`,
-                          minWidth: 28, color: catMeta.color,
-                        }}>_</span>
-                      )}
-                    </span>
-                  ))}
-                </div>
-                {q.rada && (
-                  <div style={{ fontSize: 12, color: "#8892A8", marginTop: 6 }}>Řada po {q.rada}</div>
-                )}
-              </>
-            )}
-            {showHint && !hasTimer && answered === null && q.hint && (
-              <div style={{
-                fontSize: 13, color: "#FFD166", marginTop: 14,
-                fontStyle: "italic", animation: "fadeIn .5s ease",
-              }}>💡 Nápověda: {q.hint}</div>
-            )}
-          </div>
 
           {/* Feedback */}
           {fbText && (
@@ -577,44 +631,94 @@ export default function App() {
             }}>{fbText}</div>
           )}
 
-          {/* Correct answer display on wrong */}
-          {answered !== null && !fbOk && (
-            <div style={{
-              textAlign: "center", fontSize: 14, color: "#8892A8",
-              marginBottom: 12, animation: "fadeIn .3s ease",
-            }}>
-              Správně: <strong style={{ color: "#4ADE80" }}>
-                {(q.category === "vyjna" || q.category === "predpony")
-                  ? q.display.replace("_", q.correct)
-                  : q.correct}
-              </strong>
-              {q.hint && <span> — {q.hint}</span>}
-            </div>
-          )}
+          {isAnSvazek ? (
+            <AnSvazekQuestion
+              key={q.id || qIdx}
+              question={q}
+              submitted={answered !== null}
+              evaluation={lastEval}
+              onSubmit={handleAnSvazekAnswer}
+            />
+          ) : (
+            <>
+              {/* Question card */}
+              <div key={qIdx} style={{
+                ...glassStrong,
+                borderRadius: 24,
+                padding: "32px 24px", textAlign: "center", marginBottom: 20,
+                animation: "popIn .4s cubic-bezier(.34,1.56,.64,1)",
+              }}>
+                {(q.category === "nasobilka" || q.category === "pocitani") ? (
+                  <div style={{ fontSize: 48, fontWeight: 900, letterSpacing: 3 }}>{q.display}</div>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 36, fontWeight: 900, letterSpacing: 2, lineHeight: 1.3 }}>
+                      {q.display.split("_").map((part, i, arr) => (
+                        <span key={i}>
+                          {part}
+                          {i < arr.length - 1 && (
+                            <span style={{
+                              display: "inline-block",
+                              borderBottom: `3px solid ${catMeta.color}`,
+                              minWidth: 28, color: catMeta.color,
+                            }}>_</span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                    {q.rada && (
+                      <div style={{ fontSize: 12, color: "#8892A8", marginTop: 6 }}>Řada po {q.rada}</div>
+                    )}
+                  </>
+                )}
+                {showHint && !hasTimer && answered === null && q.hint && (
+                  <div style={{
+                    fontSize: 13, color: "#FFD166", marginTop: 14,
+                    fontStyle: "italic", animation: "fadeIn .5s ease",
+                  }}>💡 Nápověda: {q.hint}</div>
+                )}
+              </div>
 
-          {/* Options */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-            {q.options.map((opt, idx) => (
-              <button
-                key={idx}
-                style={btnStyle(getState(idx))}
-                onClick={() => handleAnswer(idx)}
-                disabled={answered !== null}
-              >{opt}</button>
-            ))}
-          </div>
+              {/* Correct answer display on wrong */}
+              {answered !== null && !fbOk && (
+                <div style={{
+                  textAlign: "center", fontSize: 14, color: "#8892A8",
+                  marginBottom: 12, animation: "fadeIn .3s ease",
+                }}>
+                  Správně: <strong style={{ color: "#4ADE80" }}>
+                    {(q.category === "vyjna" || q.category === "predpony")
+                      ? q.display.replace("_", q.correct)
+                      : q.correct}
+                  </strong>
+                  {q.hint && <span> — {q.hint}</span>}
+                </div>
+              )}
 
-          {showSkip && !hasTimer && answered === null && (
-            <div style={{ textAlign: "center", animation: "fadeIn .4s ease" }}>
-              <button
-                onClick={handleSkip}
-                style={{
-                  background: "none", border: "1px solid rgba(255,255,255,.15)",
-                  color: "#8892A8", borderRadius: 12, padding: "10px 20px",
-                  fontSize: 13, cursor: "pointer", fontWeight: 600, marginTop: 8,
-                }}
-              >Přeskočit →</button>
-            </div>
+              {/* Options */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                {q.options.map((opt, idx) => (
+                  <button
+                    key={idx}
+                    style={btnStyle(getState(idx))}
+                    onClick={() => handleAnswer(idx)}
+                    disabled={answered !== null}
+                  >{opt}</button>
+                ))}
+              </div>
+
+              {showSkip && !hasTimer && answered === null && (
+                <div style={{ textAlign: "center", animation: "fadeIn .4s ease" }}>
+                  <button
+                    onClick={handleSkip}
+                    style={{
+                      background: "none", border: "1px solid rgba(255,255,255,.15)",
+                      color: "#8892A8", borderRadius: 12, padding: "10px 20px",
+                      fontSize: 13, cursor: "pointer", fontWeight: 600, marginTop: 8,
+                    }}
+                  >Přeskočit →</button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -624,16 +728,18 @@ export default function App() {
   // ═════════ RESULTS ═════════
 
   if (screen === "results") {
+    const size = results.length || roundSizeRef.current;
     const correct = results.filter(r => r.isCorrect).length;
-    const pct = Math.round((correct / ROUND_SIZE) * 100);
+    const pct = Math.round((correct / size) * 100);
     const mistakes = results.filter(r => !r.isCorrect);
     let emoji = "🎉", msg = "Fantastické kolo!";
     if (pct < 50) { emoji = "💪"; msg = "Nevadí, příště to bude lepší!"; }
     else if (pct < 80) { emoji = "👍"; msg = "Dobrá práce!"; }
     else if (pct < 100) { emoji = "🌟"; msg = "Skvělý výkon!"; }
 
-    // Add mix bonus
-    const mixBonus = activeCats.length >= 2 ? 15 : 0;
+    // Add mix bonus (ne u testovacího A/N kola)
+    const isAnTest = results.some(r => r.type === "an-svazek");
+    const mixBonus = !isAnTest && activeCats.length >= 2 ? 15 : 0;
     const totalCoins = roundCoins + mixBonus;
 
     return (
@@ -662,7 +768,7 @@ export default function App() {
               background: "linear-gradient(135deg,#FFD166,#FF6B35)",
               WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
             }}>{pct}%</div>
-            <div style={{ fontSize: 14, color: "#8892A8", marginTop: 4 }}>{correct} z {ROUND_SIZE} správně</div>
+            <div style={{ fontSize: 14, color: "#8892A8", marginTop: 4 }}>{correct} z {size} správně</div>
             <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 16, fontWeight: 700 }}>
                 <span>⭐</span><span style={{ color: "#FFD166" }}>+{roundStars}</span>
@@ -690,12 +796,17 @@ export default function App() {
                   fontSize: 14, border: "1px solid rgba(231,76,60,.2)",
                 }}>
                   <div style={{ fontWeight: 800, marginBottom: 2 }}>
-                    {(m.category === "nasobilka" || m.category === "pocitani")
-                      ? `${m.display} = ${m.correct}`
-                      : m.display.replace("_", m.correct)}
+                    {m.type === "an-svazek"
+                      ? (m.display || m.payload?.prompt || "A/N svazek")
+                      : (m.category === "nasobilka" || m.category === "pocitani")
+                        ? `${m.display} = ${m.correct}`
+                        : m.display.replace("_", m.correct)}
                   </div>
                   <div style={{ fontSize: 12, color: "#8892A8" }}>
                     Tvá odpověď: <span style={{ color: "#F87171" }}>{m.userAnswer}</span>
+                    {m.type === "an-svazek" && m.pointsMax != null && (
+                      <span> — {m.pointsEarned ?? 0}/{m.pointsMax} b</span>
+                    )}
                     {m.hint && ` — ${m.hint}`}
                   </div>
                 </div>
@@ -714,7 +825,7 @@ export default function App() {
               }}
             >🏠 Zpět</button>
             <button
-              onClick={startRound}
+              onClick={isAnTest ? startAnSvazekTest : startRound}
               style={{
                 ...glass,
                 flex: 1, padding: 16, borderRadius: 18,

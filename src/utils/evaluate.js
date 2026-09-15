@@ -47,14 +47,42 @@ function evaluateVyber(question, userAnswer) {
   })
 }
 
-/** TODO: A/N svazek — částečné body podle Cermatu. */
-function evaluateAnSvazek(question, _userAnswer) {
-  // TODO: 4 správně → plný počet, 3 → polovina (floor), 2 a méně → 0
+/** Body za A/N svazek podle Cermatu (rozšiřitelné). */
+export function scoreAnSvazekPoints(correctCount, total, maxPoints) {
+  if (total <= 0) return 0
+  if (correctCount === total) return maxPoints
+  if (correctCount === total - 1) return Math.floor(maxPoints / 2)
+  return 0
+}
+
+/** A/N svazek — userAnswer: { [statementId]: boolean } */
+function evaluateAnSvazek(question, userAnswer) {
+  const pointsMax = question.points ?? 0
+  const statements = question.payload?.statements || []
+  const answers = userAnswer && typeof userAnswer === 'object' ? userAnswer : {}
+
+  const perStatement = {}
+  let correctCount = 0
+
+  for (const s of statements) {
+    const user = answers[s.id]
+    const ok = user === s.correct
+    if (ok) correctCount++
+    perStatement[s.id] = { user, expected: s.correct, ok }
+  }
+
+  const pointsEarned = scoreAnSvazekPoints(correctCount, statements.length, pointsMax)
+  const correct = pointsEarned === pointsMax && pointsMax > 0
+
   return result({
-    correct: false,
-    pointsEarned: 0,
-    pointsMax: question.points ?? 0,
-    detail: { unimplemented: true },
+    correct,
+    pointsEarned,
+    pointsMax,
+    detail: {
+      correctCount,
+      total: statements.length,
+      perStatement,
+    },
   })
 }
 
