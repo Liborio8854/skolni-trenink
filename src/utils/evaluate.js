@@ -248,14 +248,39 @@ function evaluateOtevrenaMulti(question, userAnswer) {
   })
 }
 
-/** TODO: přiřazování — 1 bod za každé správné párování. */
-function evaluatePrirazovani(question, _userAnswer) {
-  // TODO: porovnat userMapping s correctMapping
+/** Přiřazování — userAnswer: { [itemId]: optionId } */
+function evaluatePrirazovani(question, userAnswer) {
+  const payload = question.payload || {}
+  const correctMapping = payload.correctMapping || {}
+  const keys = Object.keys(correctMapping)
+  const pointsMax = question.points ?? keys.length
+  const mapping = userAnswer && typeof userAnswer === 'object' ? userAnswer : {}
+
+  const perItem = {}
+  let correctCount = 0
+
+  for (const itemId of keys) {
+    const expected = correctMapping[itemId]
+    const user = mapping[itemId] ?? null
+    const ok = user != null && String(user) === String(expected)
+    if (ok) correctCount++
+    perItem[itemId] = { user, expected, ok }
+  }
+
+  // 1 bod za každé správné přiřazení
+  const pointsEarned = Math.min(correctCount, pointsMax)
+  const correct = pointsEarned === pointsMax && pointsMax > 0
+
   return result({
-    correct: false,
-    pointsEarned: 0,
-    pointsMax: question.points ?? 0,
-    detail: { unimplemented: true },
+    correct,
+    pointsEarned,
+    pointsMax,
+    detail: {
+      correctCount,
+      total: keys.length,
+      perItem,
+      userMapping: mapping,
+    },
   })
 }
 
