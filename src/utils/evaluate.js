@@ -157,14 +157,94 @@ function evaluateOtevrena(question, userAnswer) {
   })
 }
 
-/** TODO: otevřená odpověď s více poli. */
-function evaluateOtevrenaMulti(question, _userAnswer) {
-  // TODO: chyby = chybějící správné + navíc špatné; body − 1 za chybu
+/** Otevřená multi — userAnswer: string[] */
+function evaluateOtevrenaMulti(question, userAnswer) {
+  const pointsMax = question.points ?? 0
+  const payload = question.payload || {}
+  const correctAnswers = payload.correctAnswers || []
+  const textOpts = { caseSensitive: payload.caseSensitive === true }
+  const acceptAnyOrder = payload.acceptAnyOrder !== false
+  const rawAnswers = Array.isArray(userAnswer) ? userAnswer.map(a => String(a ?? '')) : []
+
+  const found = []
+  const wrong = []
+  const missing = []
+
+  if (acceptAnyOrder) {
+    const remaining = correctAnswers.map((text, i) => ({ text, i, used: false }))
+    for (const raw of rawAnswers) {
+      const trimmed = raw.trim()
+      if (!trimmed) continue
+      const userNorm = normalizeTextAnswer(trimmed, textOpts)
+      const matchIdx = remaining.findIndex(
+        r => !r.used && normalizeTextAnswer(r.text, textOpts) === userNorm
+      )
+      if (matchIdx >= 0) {
+        remaining[matchIdx].used = true
+        found.push(remaining[matchIdx].text)
+      } else {
+        wrong.push(trimmed)
+      }
+    }
+    for (const r of remaining) {
+      if (!r.used) missing.push(r.text)
+    }
+  } else {
+    let slotErrors = 0
+    const n = Math.max(correctAnswers.length, rawAnswers.length)
+    for (let i = 0; i < n; i++) {
+      const u = (rawAnswers[i] || '').trim()
+      const c = correctAnswers[i]
+      if (c == null) {
+        if (u) {
+          wrong.push(u)
+          slotErrors++
+        }
+        continue
+      }
+      if (u && normalizeTextAnswer(u, textOpts) === normalizeTextAnswer(c, textOpts)) {
+        found.push(c)
+      } else {
+        slotErrors++
+        if (u) wrong.push(u)
+        missing.push(c)
+      }
+    }
+    const pointsEarnedOrdered = Math.max(0, pointsMax - slotErrors)
+    const correctOrdered = pointsEarnedOrdered === pointsMax && pointsMax > 0
+    return result({
+      correct: correctOrdered,
+      pointsEarned: pointsEarnedOrdered,
+      pointsMax,
+      detail: {
+        found,
+        wrong,
+        missing,
+        errors: slotErrors,
+        total: correctAnswers.length,
+        userAnswers: rawAnswers,
+        acceptAnyOrder: false,
+      },
+    })
+  }
+
+  const errors = wrong.length + missing.length
+  const pointsEarned = Math.max(0, pointsMax - errors)
+  const correct = pointsEarned === pointsMax && pointsMax > 0
+
   return result({
-    correct: false,
-    pointsEarned: 0,
-    pointsMax: question.points ?? 0,
-    detail: { unimplemented: true },
+    correct,
+    pointsEarned,
+    pointsMax,
+    detail: {
+      found,
+      wrong,
+      missing,
+      errors,
+      total: correctAnswers.length,
+      userAnswers: rawAnswers,
+      acceptAnyOrder,
+    },
   })
 }
 

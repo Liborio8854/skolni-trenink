@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { CATS, MOTIVACE, SPATNE, ROUND_SIZE } from "./data/constants";
 import { PRAVOPIS_IY_AN_TEST } from "./data/pravopisIyTest";
 import { OTEVRENA_TEST } from "./data/otevrenaTest";
+import { OTEVRENA_MULTI_TEST } from "./data/otevrenaMultiTest";
 import { getCategory } from "./data/categories";
 import { generateQuestions } from "./utils/questions";
 import { evaluateAnswer } from "./utils/evaluate";
@@ -12,6 +13,7 @@ import TimerRing from "./components/TimerRing";
 import ConfettiBurst from "./components/ConfettiBurst";
 import AnSvazekQuestion from "./components/AnSvazekQuestion";
 import OtevrenaQuestion from "./components/OtevrenaQuestion";
+import OtevrenaMultiQuestion from "./components/OtevrenaMultiQuestion";
 
 /* ════════════════════════════════════════════════════════════════════════════
    ŠKOLNÍ TRÉNINK — v1
@@ -253,6 +255,17 @@ export default function App() {
     applyEvaluation(evaluation, value, 2200);
   };
 
+  const handleOtevrenaMultiAnswer = (values) => {
+    if (answered !== null) return;
+    clearTimers();
+    initAudio();
+    setAnswered(values);
+
+    const evaluation = evaluateAnswer(q, values);
+    const label = `${evaluation.detail.found.length}/${evaluation.detail.total} správně`;
+    applyEvaluation(evaluation, label, 3200);
+  };
+
   const handleSkip = () => {
     clearTimers();
     if (soundOn) playWrong();
@@ -300,6 +313,11 @@ export default function App() {
   /** Dočasný vstup pro vyzkoušení otevřené odpovědi */
   const startOtevrenaTest = () => {
     beginQuiz([...OTEVRENA_TEST]);
+  };
+
+  /** Dočasný vstup pro vyzkoušení otevřené multi */
+  const startOtevrenaMultiTest = () => {
+    beginQuiz([...OTEVRENA_MULTI_TEST]);
   };
 
   const toggleCat = (id) => {
@@ -555,6 +573,25 @@ export default function App() {
           >
             🧪 Test otevřená odpověď (číslo + text)
           </button>
+
+          <button
+            onClick={startOtevrenaMultiTest}
+            style={{
+              ...glass,
+              width: "100%",
+              marginTop: 10,
+              padding: 14,
+              borderRadius: 16,
+              border: "1px dashed rgba(255,255,255,.2)",
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: "pointer",
+              color: "#8892A8",
+              background: "rgba(255,255,255,.03)",
+            }}
+          >
+            🧪 Test otevřená multi (4 chyby v textu)
+          </button>
         </div>
       </div>
     );
@@ -573,6 +610,7 @@ export default function App() {
     const roundLen = questions.length || roundSizeRef.current;
     const isAnSvazek = q.type === "an-svazek";
     const isOtevrena = q.type === "otevrena";
+    const isOtevrenaMulti = q.type === "otevrena-multi";
 
     const getState = (idx) => {
       if (answered === null) return null;
@@ -691,6 +729,14 @@ export default function App() {
               evaluation={lastEval}
               onSubmit={handleOtevrenaAnswer}
             />
+          ) : isOtevrenaMulti ? (
+            <OtevrenaMultiQuestion
+              key={q.id || qIdx}
+              question={q}
+              submitted={answered !== null}
+              evaluation={lastEval}
+              onSubmit={handleOtevrenaMultiAnswer}
+            />
           ) : (
             <>
               {/* Question card */}
@@ -792,10 +838,17 @@ export default function App() {
     // Add mix bonus (ne u testovacího A/N kola)
     const isAnTest = results.some(r => r.type === "an-svazek");
     const isOtevrenaTest = results.some(r => r.type === "otevrena");
-    const isFormatTest = isAnTest || isOtevrenaTest;
+    const isOtevrenaMultiTest = results.some(r => r.type === "otevrena-multi");
+    const isFormatTest = isAnTest || isOtevrenaTest || isOtevrenaMultiTest;
     const mixBonus = !isFormatTest && activeCats.length >= 2 ? 15 : 0;
     const totalCoins = roundCoins + mixBonus;
-    const restartTest = isAnTest ? startAnSvazekTest : isOtevrenaTest ? startOtevrenaTest : startRound;
+    const restartTest = isAnTest
+      ? startAnSvazekTest
+      : isOtevrenaMultiTest
+        ? startOtevrenaMultiTest
+        : isOtevrenaTest
+          ? startOtevrenaTest
+          : startRound;
 
     return (
       <div style={bgStyle}>
@@ -851,7 +904,7 @@ export default function App() {
                   fontSize: 14, border: "1px solid rgba(231,76,60,.2)",
                 }}>
                   <div style={{ fontWeight: 800, marginBottom: 2 }}>
-                    {m.type === "an-svazek" || m.type === "otevrena"
+                    {m.type === "an-svazek" || m.type === "otevrena" || m.type === "otevrena-multi"
                       ? (m.display || m.payload?.prompt || m.type)
                       : (m.category === "nasobilka" || m.category === "pocitani")
                         ? `${m.display} = ${m.correct}`
@@ -859,7 +912,7 @@ export default function App() {
                   </div>
                   <div style={{ fontSize: 12, color: "#8892A8" }}>
                     Tvá odpověď: <span style={{ color: "#F87171" }}>{m.userAnswer}</span>
-                    {(m.type === "an-svazek" || m.type === "otevrena") && m.pointsMax != null && (
+                    {(m.type === "an-svazek" || m.type === "otevrena" || m.type === "otevrena-multi") && m.pointsMax != null && (
                       <span> — {m.pointsEarned ?? 0}/{m.pointsMax} b</span>
                     )}
                     {m.hint && ` — ${m.hint}`}
