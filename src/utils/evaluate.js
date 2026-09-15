@@ -86,14 +86,74 @@ function evaluateAnSvazek(question, userAnswer) {
   })
 }
 
-/** TODO: otevřená odpověď (číslo / text). */
-function evaluateOtevrena(question, _userAnswer) {
-  // TODO: number + tolerance; text + normalizace mezer / diakritiky
+function stripDiacritics(s) {
+  return String(s)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+function normalizeTextAnswer(s, { caseSensitive = false } = {}) {
+  let result = String(s).trim().replace(/\s+/g, ' ')
+  if (!caseSensitive) result = result.toLowerCase()
+  return result
+}
+
+function isDiacriticNearMiss(userInput, correctAnswers, options = {}) {
+  const userNorm = normalizeTextAnswer(userInput, options)
+  const userStrip = stripDiacritics(userNorm)
+  return correctAnswers.some(c => {
+    const cNorm = normalizeTextAnswer(c, options)
+    return stripDiacritics(cNorm) === userStrip && cNorm !== userNorm
+  })
+}
+
+function evaluateNumberAnswer(userInput, correctAnswers, tolerance = 0) {
+  const normalized = String(userInput).replace(/\s/g, '').replace(',', '.')
+  const value = parseFloat(normalized)
+  if (Number.isNaN(value)) return false
+  return correctAnswers.some(correct =>
+    Math.abs(value - parseFloat(String(correct).replace(',', '.'))) <= tolerance
+  )
+}
+
+function evaluateTextAnswer(userInput, correctAnswers, options = {}) {
+  const user = normalizeTextAnswer(userInput, options)
+  return correctAnswers.some(c => normalizeTextAnswer(c, options) === user)
+}
+
+/** Otevřená odpověď — userAnswer: string */
+function evaluateOtevrena(question, userAnswer) {
+  const pointsMax = question.points ?? 1
+  const payload = question.payload || {}
+  const correctAnswers = payload.correctAnswers || []
+  const raw = userAnswer == null ? '' : String(userAnswer)
+  const answerType = payload.answerType || 'text'
+
+  let correct = false
+  let diacriticNearMiss = false
+
+  if (answerType === 'number') {
+    correct = evaluateNumberAnswer(raw, correctAnswers, payload.tolerance ?? 0)
+  } else {
+    const textOpts = {
+      caseSensitive: payload.caseSensitive === true,
+    }
+    correct = evaluateTextAnswer(raw, correctAnswers, textOpts)
+    if (!correct) {
+      diacriticNearMiss = isDiacriticNearMiss(raw, correctAnswers, textOpts)
+    }
+  }
+
   return result({
-    correct: false,
-    pointsEarned: 0,
-    pointsMax: question.points ?? 0,
-    detail: { unimplemented: true },
+    correct,
+    pointsEarned: correct ? pointsMax : 0,
+    pointsMax,
+    detail: {
+      answerType,
+      userAnswer: raw,
+      correctAnswers,
+      diacriticNearMiss,
+    },
   })
 }
 

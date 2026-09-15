@@ -1,0 +1,41 @@
+/** Dočasné testovací otázky pro formát otevřená odpověď. */
+export const OTEVRENA_TEST = [
+  {
+    id: 'ma-poradi-0001',
+    subject: 'matematika',
+    category: 'poradi-operaci',
+    type: 'otevrena',
+    difficulty: 'zacatecnik',
+    points: 2,
+    display: 'Pořadí operací',
+    correct: '20',
+    hint: null,
+    payload: {
+      prompt: 'Vypočítej:  36 + 24 : 6 − 5 · 4',
+      answerType: 'number',
+      correctAnswers: ['20'],
+      tolerance: 0,
+    },
+    explanation: 'Nejprve dělení a násobení: 24 : 6 = 4, 5 · 4 = 20. Pak zleva doprava: 36 + 4 − 20 = 20.',
+    sourceText: null,
+  },
+  {
+    id: 'cj-tvoreni-0001',
+    subject: 'cestina',
+    category: 'tvoreni-slov',
+    type: 'otevrena',
+    difficulty: 'pokrocily',
+    points: 1,
+    display: 'Tvoření slov',
+    correct: 'učeň',
+    hint: null,
+    payload: {
+      prompt: 'Napiš podstatné jméno, které je v 1. pádě čísla jednotného dvouslabičné, je příbuzné se slovem UČIT, skloňuje se podle vzoru MUŽ a neobsahuje předponu.',
+      answerType: 'text',
+      correctAnswers: ['učeň'],
+      caseSensitive: false,
+    },
+    explanation: 'Učeň — dvě slabiky (u-čeň), příbuzné se slovem učit, vzor muž (bez učně), bez předpony.',
+    sourceText: null,
+  },
+]

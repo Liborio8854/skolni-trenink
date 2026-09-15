@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { CATS, MOTIVACE, SPATNE, ROUND_SIZE } from "./data/constants";
 import { PRAVOPIS_IY_AN_TEST } from "./data/pravopisIyTest";
+import { OTEVRENA_TEST } from "./data/otevrenaTest";
 import { getCategory } from "./data/categories";
 import { generateQuestions } from "./utils/questions";
 import { evaluateAnswer } from "./utils/evaluate";
@@ -10,6 +11,7 @@ import { initAudio, playCorrect, playWrong, playTimeout, playResultGreat, playRe
 import TimerRing from "./components/TimerRing";
 import ConfettiBurst from "./components/ConfettiBurst";
 import AnSvazekQuestion from "./components/AnSvazekQuestion";
+import OtevrenaQuestion from "./components/OtevrenaQuestion";
 
 /* ════════════════════════════════════════════════════════════════════════════
    ŠKOLNÍ TRÉNINK — v1
@@ -193,6 +195,13 @@ export default function App() {
       addError(q);
       setRoundStars(s => s + 5);
       setRoundCoins(co => co + 5);
+    } else if (evaluation.detail?.diacriticNearMiss) {
+      if (soundOn) playWrong();
+      setFbText("Skoro! Máš správné slovo, ale zkontroluj si diakritiku.");
+      setFbOk(true);
+      setCombo(0);
+      addWrong();
+      addError(q);
     } else {
       if (soundOn) playWrong();
       setFbText(SPATNE[Math.floor(Math.random() * SPATNE.length)]);
@@ -232,6 +241,16 @@ export default function App() {
     const evaluation = evaluateAnswer(q, userAnswers);
     const label = `${evaluation.detail.correctCount}/${evaluation.detail.total} správně`;
     applyEvaluation(evaluation, label, 2800);
+  };
+
+  const handleOtevrenaAnswer = (value) => {
+    if (answered !== null) return;
+    clearTimers();
+    initAudio();
+    setAnswered(value);
+
+    const evaluation = evaluateAnswer(q, value);
+    applyEvaluation(evaluation, value, 2200);
   };
 
   const handleSkip = () => {
@@ -276,6 +295,11 @@ export default function App() {
   /** Dočasný vstup pro vyzkoušení A/N svazku */
   const startAnSvazekTest = () => {
     beginQuiz([...PRAVOPIS_IY_AN_TEST]);
+  };
+
+  /** Dočasný vstup pro vyzkoušení otevřené odpovědi */
+  const startOtevrenaTest = () => {
+    beginQuiz([...OTEVRENA_TEST]);
   };
 
   const toggleCat = (id) => {
@@ -512,6 +536,25 @@ export default function App() {
           >
             🧪 Test A/N svazek (pravopis i/y)
           </button>
+
+          <button
+            onClick={startOtevrenaTest}
+            style={{
+              ...glass,
+              width: "100%",
+              marginTop: 10,
+              padding: 14,
+              borderRadius: 16,
+              border: "1px dashed rgba(255,255,255,.2)",
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: "pointer",
+              color: "#8892A8",
+              background: "rgba(255,255,255,.03)",
+            }}
+          >
+            🧪 Test otevřená odpověď (číslo + text)
+          </button>
         </div>
       </div>
     );
@@ -529,6 +572,7 @@ export default function App() {
     };
     const roundLen = questions.length || roundSizeRef.current;
     const isAnSvazek = q.type === "an-svazek";
+    const isOtevrena = q.type === "otevrena";
 
     const getState = (idx) => {
       if (answered === null) return null;
@@ -639,6 +683,14 @@ export default function App() {
               evaluation={lastEval}
               onSubmit={handleAnSvazekAnswer}
             />
+          ) : isOtevrena ? (
+            <OtevrenaQuestion
+              key={q.id || qIdx}
+              question={q}
+              submitted={answered !== null}
+              evaluation={lastEval}
+              onSubmit={handleOtevrenaAnswer}
+            />
           ) : (
             <>
               {/* Question card */}
@@ -739,8 +791,11 @@ export default function App() {
 
     // Add mix bonus (ne u testovacího A/N kola)
     const isAnTest = results.some(r => r.type === "an-svazek");
-    const mixBonus = !isAnTest && activeCats.length >= 2 ? 15 : 0;
+    const isOtevrenaTest = results.some(r => r.type === "otevrena");
+    const isFormatTest = isAnTest || isOtevrenaTest;
+    const mixBonus = !isFormatTest && activeCats.length >= 2 ? 15 : 0;
     const totalCoins = roundCoins + mixBonus;
+    const restartTest = isAnTest ? startAnSvazekTest : isOtevrenaTest ? startOtevrenaTest : startRound;
 
     return (
       <div style={bgStyle}>
@@ -796,15 +851,15 @@ export default function App() {
                   fontSize: 14, border: "1px solid rgba(231,76,60,.2)",
                 }}>
                   <div style={{ fontWeight: 800, marginBottom: 2 }}>
-                    {m.type === "an-svazek"
-                      ? (m.display || m.payload?.prompt || "A/N svazek")
+                    {m.type === "an-svazek" || m.type === "otevrena"
+                      ? (m.display || m.payload?.prompt || m.type)
                       : (m.category === "nasobilka" || m.category === "pocitani")
                         ? `${m.display} = ${m.correct}`
                         : m.display.replace("_", m.correct)}
                   </div>
                   <div style={{ fontSize: 12, color: "#8892A8" }}>
                     Tvá odpověď: <span style={{ color: "#F87171" }}>{m.userAnswer}</span>
-                    {m.type === "an-svazek" && m.pointsMax != null && (
+                    {(m.type === "an-svazek" || m.type === "otevrena") && m.pointsMax != null && (
                       <span> — {m.pointsEarned ?? 0}/{m.pointsMax} b</span>
                     )}
                     {m.hint && ` — ${m.hint}`}
@@ -825,7 +880,7 @@ export default function App() {
               }}
             >🏠 Zpět</button>
             <button
-              onClick={isAnTest ? startAnSvazekTest : startRound}
+              onClick={restartTest}
               style={{
                 ...glass,
                 flex: 1, padding: 16, borderRadius: 18,
