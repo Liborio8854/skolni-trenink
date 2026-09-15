@@ -76,6 +76,27 @@ export default function OtevrenaMultiQuestion({ question, submitted, evaluation,
           {payload.prompt}
         </div>
 
+        {!submitted && (question.errorDetail?.missing?.length > 0 || question.errorDetail?.wrong?.length > 0) && (
+          <div style={{
+            fontSize: 13,
+            color: '#FFD166',
+            marginBottom: 14,
+            lineHeight: 1.4,
+            padding: '10px 12px',
+            borderRadius: 12,
+            background: 'rgba(255,209,102,.08)',
+            border: '1px solid rgba(255,209,102,.25)',
+          }}>
+            📝 Z chybníku:{' '}
+            {question.errorDetail.missing?.length > 0 && (
+              <span>minule chybělo <em>{question.errorDetail.missing.join(', ')}</em>. </span>
+            )}
+            {question.errorDetail.wrong?.length > 0 && (
+              <span>špatně bylo <em>{question.errorDetail.wrong.join(', ')}</em>.</span>
+            )}
+          </div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {values.map((val, idx) => (
             <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

@@ -1,9 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { CATS, MOTIVACE, SPATNE, ROUND_SIZE } from "./data/constants";
-import { PRAVOPIS_IY_AN_TEST } from "./data/pravopisIyTest";
-import { OTEVRENA_TEST } from "./data/otevrenaTest";
-import { OTEVRENA_MULTI_TEST } from "./data/otevrenaMultiTest";
-import { PRIRAZOVANI_TEST } from "./data/prirazovaniTest";
 import { getCategory } from "./data/categories";
 import { generateQuestions } from "./utils/questions";
 import { evaluateAnswer } from "./utils/evaluate";
@@ -24,10 +20,10 @@ import PrirazovaniQuestion from "./components/PrirazovaniQuestion";
 // ── MAIN APP ────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const { progress, addCorrect, addWrong, addRound, addError, setDifficulty: setDiff, spendCoins, startSession, endSession, discardSession, getTodayTime, getWeekTime, formatTime } = useProgress();
+  const { progress, addCorrect, addWrong, addRound, addError, addCoins, setActiveCats: persistActiveCats, spendCoins, startSession, endSession, discardSession, getTodayTime, getWeekTime, formatTime } = useProgress();
   const [soundOn, setSoundOn] = useState(true);
   const [screen, setScreen] = useState("dashboard");
-  const [activeCats, setActiveCats] = useState(["vyjna"]);
+  const activeCats = progress.activeCats?.length ? progress.activeCats : CATS.map(c => c.id);
   const [questions, setQuestions] = useState([]);
   const [qIdx, setQIdx] = useState(0);
   const [answered, setAnswered] = useState(null);
@@ -57,7 +53,6 @@ export default function App() {
   const streak = progress.streak;
   const dailyCorrect = progress.dailyCorrect;
   const dailyGoal = progress.dailyGoal;
-  const difficulty = progress.difficulty;
 
   const q = questions[qIdx];
   const hasTimer = q && (q.category === "nasobilka" || q.category === "pocitani");
@@ -94,15 +89,15 @@ export default function App() {
     setCombo(0);
     const q = questions[qRef.current];
     addWrong();
-    if (q) addError(q);
+    if (q) addError(q, null);
     setResults(prev => [...prev, {
       ...q,
-      userAnswer: "⏱️ Čas vypršel", isCorrect: false,
+      userAnswer: "⏱️ Čas vypršel", isCorrect: false, pointsEarned: 0, pointsMax: q?.points ?? 1,
     }]);
     setTimeout(advanceQuestion, 1500);
   }, [questions, clearTimers, advanceQuestion, soundOn, addWrong, addError]);
 
-  // Start timers (ne u an-svazek — uživatel vyplňuje víc polí)
+  // Timers: odpočet u násobilky/počítání; jinak nápověda + přeskočení
   useEffect(() => {
     if (screen !== "quiz" || !q || answered !== null) return;
     clearTimers();
@@ -110,10 +105,6 @@ export default function App() {
     setShowSkip(false);
     setAnswerMs(null);
     startRef.current = Date.now();
-
-    if (q.type === "an-svazek") {
-      return () => clearTimers();
-    }
 
     if (hasTimer) {
       const limit = q.timeLimit;
@@ -131,7 +122,8 @@ export default function App() {
         }
       }, 50);
     } else {
-      hintRef.current = setTimeout(() => setShowHint(true), 25000);
+      const hintMs = q.category === "slovni-ulohy" ? 45000 : 25000;
+      hintRef.current = setTimeout(() => setShowHint(true), hintMs);
       skipRef.current = setTimeout(() => setShowSkip(true), 40000);
     }
     return () => clearTimers();
@@ -142,13 +134,14 @@ export default function App() {
     if (screen === "results" && results.length > 0 && !roundCounted.current) {
       roundCounted.current = true;
       addRound();
+      if (activeCats.length >= 2) {
+        addCoins(15);
+      }
       const size = results.length || roundSizeRef.current;
       const pct = Math.round((results.filter(r => r.isCorrect).length / size) * 100);
-      // Time counts only if success rate > 80%
       if (pct > 80) {
         endSession();
       } else {
-        // Discard session time
         discardSession();
       }
       if (soundOn) {
@@ -161,6 +154,27 @@ export default function App() {
     }
   }, [screen, results]);
 
+  const errorDetailFromEval = (evaluation) => {
+    if (!evaluation?.detail) return null
+    const d = evaluation.detail
+    if (q.type === "an-svazek") {
+      return {
+        perStatement: d.perStatement,
+        wrongIds: Object.entries(d.perStatement || {})
+          .filter(([, v]) => !v.ok)
+          .map(([id]) => id),
+      }
+    }
+    if (q.type === "otevrena-multi") {
+      return {
+        found: d.found,
+        wrong: d.wrong,
+        missing: d.missing,
+      }
+    }
+    return d
+  }
+
   const applyEvaluation = (evaluation, userAnswerLabel, delayMs = 1200) => {
     const ms = Date.now() - startRef.current;
     setAnswerMs(ms);
@@ -168,7 +182,9 @@ export default function App() {
 
     const { correct: ok, pointsEarned, pointsMax } = evaluation;
     const partial = !ok && pointsEarned > 0;
+    const detail = errorDetailFromEval(evaluation);
 
+    // Mince: 10 plný / 5 částečný / 0 nula. Hvězdy: stávající logika (+ násobilka).
     if (ok) {
       setConfetti(true);
       setTimeout(() => setConfetti(false), 900);
@@ -178,14 +194,15 @@ export default function App() {
       const c = combo + 1;
       setCombo(c);
 
-      let es = 10, ec = 10;
+      let es = 10;
+      const ec = 10;
       if (q.category === "nasobilka") {
         const sec = ms / 1000;
-        if (sec <= 3) { es = 30; ec = 10 + 5; }
-        else if (sec <= 5) { es = 10; }
-        else { es = 5; }
+        if (sec <= 3) es = 30;
+        else if (sec <= 5) es = 10;
+        else es = 5;
       }
-      if (c > 0 && c % 5 === 0) ec += 10;
+      if (c > 0 && c % 5 === 0) es += 5;
 
       addCorrect(es, ec);
       setRoundStars(s => s + es);
@@ -196,7 +213,7 @@ export default function App() {
       setFbOk(true);
       setCombo(0);
       addCorrect(5, 5);
-      addError(q);
+      addError(q, detail);
       setRoundStars(s => s + 5);
       setRoundCoins(co => co + 5);
     } else if (evaluation.detail?.diacriticNearMiss) {
@@ -205,14 +222,14 @@ export default function App() {
       setFbOk(true);
       setCombo(0);
       addWrong();
-      addError(q);
+      addError(q, detail);
     } else {
       if (soundOn) playWrong();
       setFbText(SPATNE[Math.floor(Math.random() * SPATNE.length)]);
       setFbOk(false);
       setCombo(0);
       addWrong();
-      addError(q);
+      addError(q, detail);
     }
 
     setResults(prev => [...prev, {
@@ -288,8 +305,14 @@ export default function App() {
     setFbOk(false);
     setCombo(0);
     addWrong();
-    addError(q);
-    setResults(prev => [...prev, { ...q, userAnswer: "Přeskočeno", isCorrect: false }]);
+    addError(q, null);
+    setResults(prev => [...prev, {
+      ...q,
+      userAnswer: "Přeskočeno",
+      isCorrect: false,
+      pointsEarned: 0,
+      pointsMax: q?.points ?? 1,
+    }]);
     setTimeout(advanceQuestion, 1200);
   };
 
@@ -315,31 +338,18 @@ export default function App() {
 
   const startRound = () => {
     if (activeCats.length === 0) return;
-    beginQuiz(generateQuestions(activeCats, difficulty));
-  };
-
-  /** Dočasný vstup pro vyzkoušení A/N svazku */
-  const startAnSvazekTest = () => {
-    beginQuiz([...PRAVOPIS_IY_AN_TEST]);
-  };
-
-  /** Dočasný vstup pro vyzkoušení otevřené odpovědi */
-  const startOtevrenaTest = () => {
-    beginQuiz([...OTEVRENA_TEST]);
-  };
-
-  /** Dočasný vstup pro vyzkoušení otevřené multi */
-  const startOtevrenaMultiTest = () => {
-    beginQuiz([...OTEVRENA_MULTI_TEST]);
-  };
-
-  /** Dočasný vstup pro vyzkoušení přiřazování */
-  const startPrirazovaniTest = () => {
-    beginQuiz([...PRIRAZOVANI_TEST]);
+    beginQuiz(generateQuestions(activeCats, 'advanced', progress.errorLog));
   };
 
   const toggleCat = (id) => {
-    setActiveCats(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
+    persistActiveCats(prev => {
+      const cur = prev?.length ? prev : CATS.map(c => c.id);
+      if (cur.includes(id)) {
+        if (cur.length <= 1) return cur; // poslední nejde odkliknout
+        return cur.filter(c => c !== id);
+      }
+      return [...cur, id];
+    });
   };
 
   const css = `
@@ -503,36 +513,6 @@ export default function App() {
             }}>🎲 Mix kategorií — bonus +15 🪙 za kolo!</div>
           )}
 
-          {/* Difficulty toggle */}
-          <div style={{
-            ...glass,
-            display: "flex", gap: 0, marginBottom: 20, borderRadius: 18, overflow: "hidden",
-          }}>
-            {[
-              { id: "beginner", label: "🌱 Začátečník", desc: "Jednodušší, delší časy" },
-              { id: "advanced", label: "🔥 Pokročilý", desc: "Kratší časy, bonus za mix" },
-            ].map(d => {
-              const on = difficulty === d.id;
-              return (
-                <button
-                  key={d.id}
-                  onClick={() => setDiff(d.id)}
-                  style={{
-                    flex: 1, padding: "12px 8px", border: "none", cursor: "pointer",
-                    background: on ? "rgba(255,255,255,.08)" : "transparent",
-                    color: on ? "#FFD166" : "#8892A8",
-                    fontSize: 13, fontWeight: on ? 800 : 600,
-                    transition: "all .2s",
-                    borderRight: d.id === "beginner" ? "1px solid rgba(255,255,255,.08)" : "none",
-                  }}
-                >
-                  <div>{d.label}</div>
-                  <div style={{ fontSize: 10, marginTop: 2, opacity: .7 }}>{d.desc}</div>
-                </button>
-              );
-            })}
-          </div>
-
           <button
             onClick={startRound}
             style={{
@@ -551,83 +531,6 @@ export default function App() {
             }}
           >
             {activeCats.length > 0 ? "🚀  START  🚀" : "Vyber kategorii"}
-          </button>
-
-          {/* Dočasný vstup — test formátu A/N svazek */}
-          <button
-            onClick={startAnSvazekTest}
-            style={{
-              ...glass,
-              width: "100%",
-              marginTop: 12,
-              padding: 14,
-              borderRadius: 16,
-              border: "1px dashed rgba(255,255,255,.2)",
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: "pointer",
-              color: "#8892A8",
-              background: "rgba(255,255,255,.03)",
-            }}
-          >
-            🧪 Test A/N svazek (pravopis i/y)
-          </button>
-
-          <button
-            onClick={startOtevrenaTest}
-            style={{
-              ...glass,
-              width: "100%",
-              marginTop: 10,
-              padding: 14,
-              borderRadius: 16,
-              border: "1px dashed rgba(255,255,255,.2)",
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: "pointer",
-              color: "#8892A8",
-              background: "rgba(255,255,255,.03)",
-            }}
-          >
-            🧪 Test otevřená odpověď (číslo + text)
-          </button>
-
-          <button
-            onClick={startOtevrenaMultiTest}
-            style={{
-              ...glass,
-              width: "100%",
-              marginTop: 10,
-              padding: 14,
-              borderRadius: 16,
-              border: "1px dashed rgba(255,255,255,.2)",
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: "pointer",
-              color: "#8892A8",
-              background: "rgba(255,255,255,.03)",
-            }}
-          >
-            🧪 Test otevřená multi (4 chyby v textu)
-          </button>
-
-          <button
-            onClick={startPrirazovaniTest}
-            style={{
-              ...glass,
-              width: "100%",
-              marginTop: 10,
-              padding: 14,
-              borderRadius: 16,
-              border: "1px dashed rgba(255,255,255,.2)",
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: "pointer",
-              color: "#8892A8",
-              background: "rgba(255,255,255,.03)",
-            }}
-          >
-            🧪 Test přiřazování
           </button>
         </div>
       </div>
@@ -849,20 +752,27 @@ export default function App() {
                   >{opt}</button>
                 ))}
               </div>
-
-              {showSkip && !hasTimer && answered === null && (
-                <div style={{ textAlign: "center", animation: "fadeIn .4s ease" }}>
-                  <button
-                    onClick={handleSkip}
-                    style={{
-                      background: "none", border: "1px solid rgba(255,255,255,.15)",
-                      color: "#8892A8", borderRadius: 12, padding: "10px 20px",
-                      fontSize: 13, cursor: "pointer", fontWeight: 600, marginTop: 8,
-                    }}
-                  >Přeskočit →</button>
-                </div>
-              )}
             </>
+          )}
+
+          {showHint && !hasTimer && answered === null && q.type !== "vyber" && q.hint && (
+            <div style={{
+              fontSize: 13, color: "#FFD166", textAlign: "center", marginTop: 8,
+              fontStyle: "italic", animation: "fadeIn .5s ease",
+            }}>💡 Nápověda: {q.hint}</div>
+          )}
+
+          {showSkip && !hasTimer && answered === null && (
+            <div style={{ textAlign: "center", animation: "fadeIn .4s ease" }}>
+              <button
+                onClick={handleSkip}
+                style={{
+                  background: "none", border: "1px solid rgba(255,255,255,.15)",
+                  color: "#8892A8", borderRadius: 12, padding: "10px 20px",
+                  fontSize: 13, cursor: "pointer", fontWeight: 600, marginTop: 8,
+                }}
+              >Přeskočit →</button>
+            </div>
           )}
         </div>
       </div>
@@ -881,23 +791,9 @@ export default function App() {
     else if (pct < 80) { emoji = "👍"; msg = "Dobrá práce!"; }
     else if (pct < 100) { emoji = "🌟"; msg = "Skvělý výkon!"; }
 
-    // Add mix bonus (ne u testovacího A/N kola)
-    const isAnTest = results.some(r => r.type === "an-svazek");
-    const isOtevrenaTest = results.some(r => r.type === "otevrena");
-    const isOtevrenaMultiTest = results.some(r => r.type === "otevrena-multi");
-    const isPrirazovaniTest = results.some(r => r.type === "prirazovani");
-    const isFormatTest = isAnTest || isOtevrenaTest || isOtevrenaMultiTest || isPrirazovaniTest;
-    const mixBonus = !isFormatTest && activeCats.length >= 2 ? 15 : 0;
+    // Add mix bonus
+    const mixBonus = activeCats.length >= 2 ? 15 : 0;
     const totalCoins = roundCoins + mixBonus;
-    const restartTest = isAnTest
-      ? startAnSvazekTest
-      : isPrirazovaniTest
-        ? startPrirazovaniTest
-        : isOtevrenaMultiTest
-          ? startOtevrenaMultiTest
-          : isOtevrenaTest
-            ? startOtevrenaTest
-            : startRound;
 
     return (
       <div style={bgStyle}>
@@ -982,7 +878,7 @@ export default function App() {
               }}
             >🏠 Zpět</button>
             <button
-              onClick={restartTest}
+              onClick={startRound}
               style={{
                 ...glass,
                 flex: 1, padding: 16, borderRadius: 18,

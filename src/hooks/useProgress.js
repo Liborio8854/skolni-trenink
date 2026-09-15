@@ -1,6 +1,31 @@
 import { useState, useEffect } from 'react'
+import { CATS } from '../data/constants'
  
 const STORAGE_KEY = 'skolni-trenink'
+
+function snapshotQuestion(question) {
+  if (!question) return null
+  const {
+    fromErrorLog,
+    errorDetail,
+    ...rest
+  } = question
+  return JSON.parse(JSON.stringify(rest))
+}
+
+function allCatIds() {
+  return CATS.map(c => c.id)
+}
+
+/** Obnoví výběr kategorií: platné ID, aspoň jedna; nové kategorie přibydou jako vybrané. */
+export function resolveActiveCats(stored) {
+  const all = allCatIds()
+  if (!Array.isArray(stored) || stored.length === 0) return all
+  const valid = stored.filter(id => all.includes(id))
+  if (valid.length === 0) return all
+  const newcomers = all.filter(id => !stored.includes(id))
+  return [...valid, ...newcomers]
+}
  
 const defaultState = {
   stars: 0,
@@ -9,7 +34,8 @@ const defaultState = {
   lastActiveDate: null,
   dailyCorrect: 0,
   dailyGoal: 30,
-  difficulty: 'advanced',
+  difficulty: 'advanced', // uchováno pro případný návrat UI
+  activeCats: allCatIds(),
   errorLog: [],
   totalRounds: 0,
   totalCorrect: 0,
@@ -25,10 +51,14 @@ export function useProgress() {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) {
         const parsed = JSON.parse(stored)
-        return { ...defaultState, ...parsed }
+        const merged = { ...defaultState, ...parsed }
+        merged.activeCats = resolveActiveCats(parsed.activeCats)
+        // difficulty v progress necháme (pro budoucí UI), runtime ji nepoužíváme k filtraci
+        if (!merged.difficulty) merged.difficulty = 'advanced'
+        return merged
       }
     } catch (e) {}
-    return { ...defaultState }
+    return { ...defaultState, activeCats: allCatIds() }
   })
  
   // Save to localStorage whenever progress changes
@@ -88,15 +118,24 @@ export function useProgress() {
     setProgress(p => ({ ...p, totalRounds: p.totalRounds + 1 }))
   }
  
-  const addError = (question) => {
+  const addError = (question, detail = null) => {
     if (!question) return
     setProgress(p => {
-      const key = question.display + '|' + question.correct
+      const key = question.id
+        || `${question.category}|${question.display}|${question.correct}`
       const existing = p.errorLog.find(e => e.key === key)
       let newLog
       if (existing) {
         newLog = p.errorLog.map(e =>
-          e.key === key ? { ...e, count: e.count + 1, lastSeen: Date.now() } : e
+          e.key === key
+            ? {
+                ...e,
+                count: e.count + 1,
+                lastSeen: Date.now(),
+                detail: detail ?? e.detail ?? null,
+                question: e.question || snapshotQuestion(question),
+              }
+            : e
         )
       } else {
         newLog = [...p.errorLog, {
@@ -105,6 +144,9 @@ export function useProgress() {
           correct: question.correct,
           hint: question.hint,
           category: question.category,
+          type: question.type,
+          question: snapshotQuestion(question),
+          detail: detail || null,
           count: 1,
           lastSeen: Date.now(),
         }]
@@ -118,6 +160,23 @@ export function useProgress() {
  
   const setDifficulty = (d) => {
     setProgress(p => ({ ...p, difficulty: d }))
+  }
+
+  const setActiveCats = (catsOrUpdater) => {
+    setProgress(p => {
+      const next = typeof catsOrUpdater === 'function'
+        ? catsOrUpdater(p.activeCats)
+        : catsOrUpdater
+      const resolved = resolveActiveCats(next)
+      // Aspoň jedna kategorie
+      if (resolved.length === 0) return p
+      return { ...p, activeCats: resolved }
+    })
+  }
+
+  const addCoins = (amount) => {
+    if (!amount) return
+    setProgress(p => ({ ...p, coins: p.coins + amount }))
   }
  
   const spendCoins = (amount) => {
@@ -186,7 +245,7 @@ export function useProgress() {
   }
  
   const resetProgress = () => {
-    setProgress({ ...defaultState })
+    setProgress({ ...defaultState, activeCats: allCatIds() })
   }
  
   return {
@@ -195,7 +254,9 @@ export function useProgress() {
     addWrong,
     addRound,
     addError,
+    addCoins,
     setDifficulty,
+    setActiveCats,
     spendCoins,
     startSession,
     endSession,

@@ -81,6 +81,7 @@ export default function AnSvazekQuestion({ question, submitted, evaluation, onSu
           {statements.map((s, i) => {
             const detail = evaluation?.detail?.perStatement?.[s.id]
             const rowOk = submitted ? detail?.ok : null
+            const focusWrong = !submitted && question.errorDetail?.wrongIds?.includes(s.id)
             let rowBg = 'rgba(255,255,255,.04)'
             let rowBorder = '1px solid rgba(255,255,255,.1)'
             if (rowOk === true) {
@@ -89,6 +90,9 @@ export default function AnSvazekQuestion({ question, submitted, evaluation, onSu
             } else if (rowOk === false) {
               rowBg = 'rgba(231,76,60,.12)'
               rowBorder = '1px solid rgba(231,76,60,.35)'
+            } else if (focusWrong) {
+              rowBg = 'rgba(255,209,102,.08)'
+              rowBorder = '1px solid rgba(255,209,102,.4)'
             }
 
             return (
@@ -112,6 +116,11 @@ export default function AnSvazekQuestion({ question, submitted, evaluation, onSu
                   }}>
                     <span style={{ color: '#8892A8', marginRight: 4 }}>{i + 1}.</span>
                     {s.text}
+                    {focusWrong && (
+                      <span style={{ display: 'block', fontSize: 12, color: '#FFD166', marginTop: 4, fontWeight: 700 }}>
+                        📝 Minule tady chyba
+                      </span>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: 10 }}>
                     <button

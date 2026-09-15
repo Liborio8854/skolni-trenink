@@ -1,6 +1,7 @@
 import { VYJNA } from '../data/vyjna'
 import { PREDPONY } from '../data/predpony'
 import { ROUND_SIZE } from '../data/constants'
+import { getBankQuestions, bankCategories } from '../data/questionBank'
 
 export function shuffle(a) {
   const b = [...a]
@@ -61,149 +62,235 @@ export function mathOpts(correct, mathType) {
   return shuffle(opts)
 }
 
-export function generateQuestions(activeCats, difficulty) {
+const LEGACY_CATS = new Set(['vyjna', 'predpony', 'nasobilka', 'pocitani'])
+const BANK_CATS = new Set(bankCategories())
+
+function makeVyberPayload(display, options, correctIdx) {
+  return {
+    prompt: display,
+    options: options.map((text, i) => ({ id: String(i), text })),
+    correctOptionId: String(correctIdx),
+  }
+}
+
+function generateOne(cat, difficulty, ctx) {
+  // Runtime vždy „pokročilý“ (kratší časy); pole difficulty u bankových otázek se nefiltruje
+  const isBegin = false
+
+  if (cat === 'vyjna') {
+    if (ctx.vyjnaIdx >= ctx.vyjnaPool.length) ctx.vyjnaIdx = 0
+    const item = ctx.vyjnaPool[ctx.vyjnaIdx++]
+    const isY = item.correct === 'y' || item.correct === 'ý'
+    const options = ['y / ý', 'i / í']
+    const correctIdx = isY ? 0 : 1
+    return {
+      type: 'vyber',
+      category: 'vyjna',
+      subject: 'cestina',
+      points: 1,
+      display: item.word,
+      options,
+      correctIdx,
+      correct: item.correct,
+      hint: item.hint,
+      rada: item.rada,
+      payload: makeVyberPayload(item.word, options, correctIdx),
+      explanation: item.hint || null,
+      sourceText: null,
+    }
+  }
+
+  if (cat === 'predpony') {
+    if (ctx.predIdx >= ctx.predPool.length) ctx.predIdx = 0
+    const item = ctx.predPool[ctx.predIdx++]
+    const shuffledOpts = shuffle([...item.opts])
+    const correctIdx = shuffledOpts.indexOf(item.correct)
+    return {
+      type: 'vyber',
+      category: 'predpony',
+      subject: 'cestina',
+      points: 1,
+      display: item.word,
+      options: shuffledOpts,
+      correctIdx,
+      correct: item.correct,
+      hint: item.hint,
+      payload: makeVyberPayload(item.word, shuffledOpts, correctIdx),
+      explanation: item.hint || null,
+      sourceText: null,
+    }
+  }
+
+  if (cat === 'nasobilka') {
+    let a, b, key, att = 0
+    do {
+      att++
+      if (isBegin) {
+        a = 2 + Math.floor(Math.random() * 4)
+        b = 2 + Math.floor(Math.random() * 4)
+      } else {
+        a = 2 + Math.floor(Math.random() * 9)
+        b = 2 + Math.floor(Math.random() * 9)
+      }
+      key = `${Math.min(a, b)}×${Math.max(a, b)}`
+    } while (ctx.used.has(key) && att < 30)
+    ctx.used.add(key)
+    const answer = a * b
+    const opts = mathOpts(answer, 'nasobilka')
+    const options = opts.map(String)
+    const correctIdx = opts.indexOf(answer)
+    const display = `${a} × ${b}`
+    return {
+      type: 'vyber',
+      category: 'nasobilka',
+      subject: 'matematika',
+      points: 1,
+      display,
+      options,
+      correctIdx,
+      correct: String(answer),
+      timeLimit: isBegin ? 12 : 8,
+      payload: makeVyberPayload(display, options, correctIdx),
+      explanation: null,
+      sourceText: null,
+    }
+  }
+
+  if (cat === 'pocitani') {
+    let m, key, st, att = 0
+    do {
+      att++
+      st = Math.random() > 0.5 ? 'scitani' : 'odcitani'
+      if (isBegin) {
+        if (st === 'scitani') {
+          const a = 10 + Math.floor(Math.random() * 40)
+          const b = 1 + Math.floor(Math.random() * (50 - a))
+          m = { q: `${a} + ${b}`, answer: a + b }
+        } else {
+          const a = 20 + Math.floor(Math.random() * 30)
+          const b = 1 + Math.floor(Math.random() * (a - 10))
+          m = { q: `${a} − ${b}`, answer: a - b }
+        }
+      } else {
+        m = genMath(st)
+      }
+      key = m.q
+    } while (ctx.used.has(key) && att < 30)
+    ctx.used.add(key)
+    const opts = mathOpts(m.answer, st)
+    const options = opts.map(String)
+    const correctIdx = opts.indexOf(m.answer)
+    return {
+      type: 'vyber',
+      category: 'pocitani',
+      subject: 'matematika',
+      points: 1,
+      display: m.q,
+      options,
+      correctIdx,
+      correct: String(m.answer),
+      timeLimit: isBegin
+        ? (st === 'scitani' ? 22 : 25)
+        : (st === 'scitani' ? 17 : 20),
+      payload: makeVyberPayload(m.q, options, correctIdx),
+      explanation: null,
+      sourceText: null,
+    }
+  }
+
+  // Bankové kategorie — různé formáty podle dostupných otázek
+  if (BANK_CATS.has(cat)) {
+    if (!ctx.bankPools[cat] || ctx.bankPools[cat].idx >= ctx.bankPools[cat].pool.length) {
+      ctx.bankPools[cat] = { pool: shuffle(getBankQuestions(cat)), idx: 0 }
+    }
+    const bp = ctx.bankPools[cat]
+    if (bp.pool.length === 0) return null
+    if (bp.idx >= bp.pool.length) bp.idx = 0
+    const q = bp.pool[bp.idx++]
+    return { ...q, fromErrorLog: false, errorDetail: null }
+  }
+
+  return null
+}
+
+function errorEntryToQuestion(entry) {
+  if (!entry?.question || !entry.question.type) return null
+  return {
+    ...entry.question,
+    fromErrorLog: true,
+    errorDetail: entry.detail || null,
+  }
+}
+
+/**
+ * Zamíchá 2–3 otázky z chybníku do kola — ne na začátek.
+ */
+function injectErrorLogQuestions(questions, errorLog) {
+  if (!errorLog?.length || questions.length < 3) return questions
+
+  const want = Math.min(2 + Math.floor(Math.random() * 2), errorLog.length, questions.length - 2)
+  const candidates = shuffle(
+    errorLog
+      .map(errorEntryToQuestion)
+      .filter(Boolean)
+  ).slice(0, want)
+
+  if (candidates.length === 0) return questions
+
+  const result = [...questions]
+  // Pozice od indexu 2 dál (ne začátek)
+  const slots = shuffle(
+    Array.from({ length: result.length - 2 }, (_, i) => i + 2)
+  ).slice(0, candidates.length)
+
+  slots.forEach((slot, i) => {
+    result[slot] = candidates[i]
+  })
+
+  return result
+}
+
+/**
+ * @param {string[]} activeCats
+ * @param {string} [_difficulty] — ignorováno; vždy pokročilý režim (kratší časy)
+ * @param {array} [errorLog]
+ */
+export function generateQuestions(activeCats, _difficulty = 'advanced', errorLog = []) {
+  if (!activeCats?.length) return []
+
+  const difficulty = 'advanced'
+  const ctx = {
+    used: new Set(),
+    vyjnaPool: shuffle([...VYJNA]),
+    predPool: shuffle([...PREDPONY]),
+    vyjnaIdx: 0,
+    predIdx: 0,
+    bankPools: {},
+  }
+
   const questions = []
   const perCat = Math.ceil(ROUND_SIZE / activeCats.length)
-  const isBegin = difficulty === 'beginner'
-  const used = new Set()
-
-  const vyjnaPool = shuffle(
-    isBegin ? VYJNA.filter(v => v.rada === 'B' || v.rada === 'L') : [...VYJNA]
-  )
-  const predPool = shuffle(
-    isBegin ? PREDPONY.filter(p => p.opts[0] === 'vy' || p.opts[0] === 'vi') : [...PREDPONY]
-  )
-  let vyjnaIdx = 0, predIdx = 0
 
   for (const cat of activeCats) {
     for (let i = 0; i < perCat && questions.length < ROUND_SIZE; i++) {
-      if (cat === 'vyjna') {
-        if (vyjnaIdx >= vyjnaPool.length) vyjnaIdx = 0
-        const item = vyjnaPool[vyjnaIdx++]
-        const isY = item.correct === 'y' || item.correct === 'ý'
-        const options = ['y / ý', 'i / í']
-        const correctIdx = isY ? 0 : 1
-        questions.push({
-          type: 'vyber',
-          category: 'vyjna',
-          subject: 'cestina',
-          points: 1,
-          display: item.word,
-          options,
-          correctIdx,
-          correct: item.correct, hint: item.hint, rada: item.rada,
-          payload: {
-            prompt: item.word,
-            options: options.map((text, i) => ({ id: String(i), text })),
-            correctOptionId: String(correctIdx),
-          },
-          explanation: item.hint || null,
-          sourceText: null,
-        })
-      } else if (cat === 'predpony') {
-        if (predIdx >= predPool.length) predIdx = 0
-        const item = predPool[predIdx++]
-        const shuffledOpts = shuffle([...item.opts])
-        const correctIdx = shuffledOpts.indexOf(item.correct)
-        questions.push({
-          type: 'vyber',
-          category: 'predpony',
-          subject: 'cestina',
-          points: 1,
-          display: item.word,
-          options: shuffledOpts,
-          correctIdx,
-          correct: item.correct, hint: item.hint,
-          payload: {
-            prompt: item.word,
-            options: shuffledOpts.map((text, i) => ({ id: String(i), text })),
-            correctOptionId: String(correctIdx),
-          },
-          explanation: item.hint || null,
-          sourceText: null,
-        })
-      } else if (cat === 'nasobilka') {
-        let a, b, key, att = 0
-        do {
-          att++
-          if (isBegin) {
-            a = 2 + Math.floor(Math.random() * 4)
-            b = 2 + Math.floor(Math.random() * 4)
-          } else {
-            a = 2 + Math.floor(Math.random() * 9)
-            b = 2 + Math.floor(Math.random() * 9)
-          }
-          key = `${Math.min(a,b)}×${Math.max(a,b)}`
-        } while (used.has(key) && att < 30)
-        used.add(key)
-        const answer = a * b
-        const opts = mathOpts(answer, 'nasobilka')
-        const options = opts.map(String)
-        const correctIdx = opts.indexOf(answer)
-        const display = `${a} × ${b}`
-        questions.push({
-          type: 'vyber',
-          category: 'nasobilka',
-          subject: 'matematika',
-          points: 1,
-          display,
-          options,
-          correctIdx,
-          correct: String(answer), timeLimit: isBegin ? 12 : 8,
-          payload: {
-            prompt: display,
-            options: options.map((text, i) => ({ id: String(i), text })),
-            correctOptionId: String(correctIdx),
-          },
-          explanation: null,
-          sourceText: null,
-        })
-      } else {
-        let m, key, st, att = 0
-        do {
-          att++
-          st = Math.random() > 0.5 ? 'scitani' : 'odcitani'
-          if (isBegin) {
-            if (st === 'scitani') {
-              const a = 10 + Math.floor(Math.random() * 40)
-              const b = 1 + Math.floor(Math.random() * (50 - a))
-              m = { q: `${a} + ${b}`, answer: a + b }
-            } else {
-              const a = 20 + Math.floor(Math.random() * 30)
-              const b = 1 + Math.floor(Math.random() * (a - 10))
-              m = { q: `${a} − ${b}`, answer: a - b }
-            }
-          } else {
-            m = genMath(st)
-          }
-          key = m.q
-        } while (used.has(key) && att < 30)
-        used.add(key)
-        const opts = mathOpts(m.answer, st)
-        const options = opts.map(String)
-        const correctIdx = opts.indexOf(m.answer)
-        questions.push({
-          type: 'vyber',
-          category: 'pocitani',
-          subject: 'matematika',
-          points: 1,
-          display: m.q,
-          options,
-          correctIdx,
-          correct: String(m.answer),
-          timeLimit: isBegin
-            ? (st === 'scitani' ? 22 : 25)
-            : (st === 'scitani' ? 17 : 20),
-          payload: {
-            prompt: m.q,
-            options: options.map((text, i) => ({ id: String(i), text })),
-            correctOptionId: String(correctIdx),
-          },
-          explanation: null,
-          sourceText: null,
-        })
-      }
+      const q = generateOne(cat, difficulty, ctx)
+      if (q) questions.push(q)
     }
   }
-  return shuffle(questions).slice(0, ROUND_SIZE)
+
+  // Doplň, pokud nějaká kategorie nevrátila dost otázek
+  let guard = 0
+  while (questions.length < ROUND_SIZE && guard < 50) {
+    guard++
+    const cat = activeCats[questions.length % activeCats.length]
+    const q = generateOne(cat, difficulty, ctx)
+    if (q) questions.push(q)
+    else break
+  }
+
+  let round = shuffle(questions).slice(0, ROUND_SIZE)
+  round = injectErrorLogQuestions(round, errorLog)
+  return round.slice(0, ROUND_SIZE)
 }
+
+export { LEGACY_CATS, BANK_CATS }
