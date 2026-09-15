@@ -104,7 +104,7 @@ export function useProgress() {
           display: question.display,
           correct: question.correct,
           hint: question.hint,
-          type: question.type,
+          category: question.category,
           count: 1,
           lastSeen: Date.now(),
         }]

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { CATS, MOTIVACE, SPATNE, ROUND_SIZE } from "./data/constants";
 import { generateQuestions } from "./utils/questions";
+import { evaluateAnswer } from "./utils/evaluate";
 import { glass, glassStrong, glassBadge, bgStyle, wrapStyle, BgBlobs } from "./utils/styles";
 import { useProgress } from "./hooks/useProgress";
 import { initAudio, playCorrect, playWrong, playTimeout, playResultGreat, playResultOk, playResultBad } from "./utils/sounds";
@@ -48,7 +49,7 @@ export default function App() {
   const difficulty = progress.difficulty;
 
   const q = questions[qIdx];
-  const hasTimer = q && (q.type === "nasobilka" || q.type === "pocitani");
+  const hasTimer = q && (q.category === "nasobilka" || q.category === "pocitani");
 
   const clearTimers = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -151,7 +152,7 @@ export default function App() {
     setAnswerMs(ms);
     setAnswered(idx);
 
-    const ok = idx === q.correctIdx;
+    const { correct: ok } = evaluateAnswer(q, idx);
     if (ok) {
       setConfetti(true);
       setTimeout(() => setConfetti(false), 900);
@@ -162,7 +163,7 @@ export default function App() {
       setCombo(c);
 
       let es = 10, ec = 10;
-      if (q.type === "nasobilka") {
+      if (q.category === "nasobilka") {
         const sec = ms / 1000;
         if (sec <= 3) { es = 30; ec = 10 + 5; }
         else if (sec <= 5) { es = 10; }
@@ -441,7 +442,7 @@ export default function App() {
   // ═════════ QUIZ ═════════
 
   if (screen === "quiz" && q) {
-    const catMeta = CATS.find(c => c.id === q.type) || CATS[0];
+    const catMeta = CATS.find(c => c.id === q.category) || CATS[0];
     const getState = (idx) => {
       if (answered === null) return null;
       if (idx === q.correctIdx) return "correct";
@@ -474,7 +475,7 @@ export default function App() {
 
     // Speed badge for nasobilka
     let speedBadge = null;
-    if (answered !== null && answered !== -1 && q.type === "nasobilka" && results.length > 0 && results[results.length - 1].isCorrect) {
+    if (answered !== null && answered !== -1 && q.category === "nasobilka" && results.length > 0 && results[results.length - 1].isCorrect) {
       const sec = answerMs / 1000;
       let lbl, col;
       if (sec <= 3) { lbl = "⚡ BLESK ×3"; col = "#FFD166"; }
@@ -536,7 +537,7 @@ export default function App() {
             padding: "32px 24px", textAlign: "center", marginBottom: 20,
             animation: "popIn .4s cubic-bezier(.34,1.56,.64,1)",
           }}>
-            {(q.type === "nasobilka" || q.type === "pocitani") ? (
+            {(q.category === "nasobilka" || q.category === "pocitani") ? (
               <div style={{ fontSize: 48, fontWeight: 900, letterSpacing: 3 }}>{q.display}</div>
             ) : (
               <>
@@ -583,7 +584,7 @@ export default function App() {
               marginBottom: 12, animation: "fadeIn .3s ease",
             }}>
               Správně: <strong style={{ color: "#4ADE80" }}>
-                {(q.type === "vyjna" || q.type === "predpony")
+                {(q.category === "vyjna" || q.category === "predpony")
                   ? q.display.replace("_", q.correct)
                   : q.correct}
               </strong>
@@ -689,7 +690,7 @@ export default function App() {
                   fontSize: 14, border: "1px solid rgba(231,76,60,.2)",
                 }}>
                   <div style={{ fontWeight: 800, marginBottom: 2 }}>
-                    {(m.type === "nasobilka" || m.type === "pocitani")
+                    {(m.category === "nasobilka" || m.category === "pocitani")
                       ? `${m.display} = ${m.correct}`
                       : m.display.replace("_", m.correct)}
                   </div>

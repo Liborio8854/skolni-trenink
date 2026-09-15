@@ -81,21 +81,46 @@ export function generateQuestions(activeCats, difficulty) {
         if (vyjnaIdx >= vyjnaPool.length) vyjnaIdx = 0
         const item = vyjnaPool[vyjnaIdx++]
         const isY = item.correct === 'y' || item.correct === 'ý'
+        const options = ['y / ý', 'i / í']
+        const correctIdx = isY ? 0 : 1
         questions.push({
-          type: 'vyjna', display: item.word,
-          options: ['y / ý', 'i / í'],
-          correctIdx: isY ? 0 : 1,
+          type: 'vyber',
+          category: 'vyjna',
+          subject: 'cestina',
+          points: 1,
+          display: item.word,
+          options,
+          correctIdx,
           correct: item.correct, hint: item.hint, rada: item.rada,
+          payload: {
+            prompt: item.word,
+            options: options.map((text, i) => ({ id: String(i), text })),
+            correctOptionId: String(correctIdx),
+          },
+          explanation: item.hint || null,
+          sourceText: null,
         })
       } else if (cat === 'predpony') {
         if (predIdx >= predPool.length) predIdx = 0
         const item = predPool[predIdx++]
         const shuffledOpts = shuffle([...item.opts])
+        const correctIdx = shuffledOpts.indexOf(item.correct)
         questions.push({
-          type: 'predpony', display: item.word,
+          type: 'vyber',
+          category: 'predpony',
+          subject: 'cestina',
+          points: 1,
+          display: item.word,
           options: shuffledOpts,
-          correctIdx: shuffledOpts.indexOf(item.correct),
+          correctIdx,
           correct: item.correct, hint: item.hint,
+          payload: {
+            prompt: item.word,
+            options: shuffledOpts.map((text, i) => ({ id: String(i), text })),
+            correctOptionId: String(correctIdx),
+          },
+          explanation: item.hint || null,
+          sourceText: null,
         })
       } else if (cat === 'nasobilka') {
         let a, b, key, att = 0
@@ -113,11 +138,25 @@ export function generateQuestions(activeCats, difficulty) {
         used.add(key)
         const answer = a * b
         const opts = mathOpts(answer, 'nasobilka')
+        const options = opts.map(String)
+        const correctIdx = opts.indexOf(answer)
+        const display = `${a} × ${b}`
         questions.push({
-          type: 'nasobilka', display: `${a} × ${b}`,
-          options: opts.map(String),
-          correctIdx: opts.indexOf(answer),
+          type: 'vyber',
+          category: 'nasobilka',
+          subject: 'matematika',
+          points: 1,
+          display,
+          options,
+          correctIdx,
           correct: String(answer), timeLimit: isBegin ? 12 : 8,
+          payload: {
+            prompt: display,
+            options: options.map((text, i) => ({ id: String(i), text })),
+            correctOptionId: String(correctIdx),
+          },
+          explanation: null,
+          sourceText: null,
         })
       } else {
         let m, key, st, att = 0
@@ -141,14 +180,27 @@ export function generateQuestions(activeCats, difficulty) {
         } while (used.has(key) && att < 30)
         used.add(key)
         const opts = mathOpts(m.answer, st)
+        const options = opts.map(String)
+        const correctIdx = opts.indexOf(m.answer)
         questions.push({
-          type: 'pocitani', display: m.q,
-          options: opts.map(String),
-          correctIdx: opts.indexOf(m.answer),
+          type: 'vyber',
+          category: 'pocitani',
+          subject: 'matematika',
+          points: 1,
+          display: m.q,
+          options,
+          correctIdx,
           correct: String(m.answer),
           timeLimit: isBegin
             ? (st === 'scitani' ? 22 : 25)
             : (st === 'scitani' ? 17 : 20),
+          payload: {
+            prompt: m.q,
+            options: options.map((text, i) => ({ id: String(i), text })),
+            correctOptionId: String(correctIdx),
+          },
+          explanation: null,
+          sourceText: null,
         })
       }
     }
