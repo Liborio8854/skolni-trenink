@@ -167,10 +167,12 @@ export function useProgress() {
       const next = typeof catsOrUpdater === 'function'
         ? catsOrUpdater(p.activeCats)
         : catsOrUpdater
-      const resolved = resolveActiveCats(next)
-      // Aspoň jedna kategorie
-      if (resolved.length === 0) return p
-      return { ...p, activeCats: resolved }
+      if (!Array.isArray(next)) return p
+      const all = allCatIds()
+      const valid = next.filter(id => all.includes(id))
+      // Aspoň jedna kategorie (bez znovu-přidávání „newcomers“ — to jen při loadu)
+      if (valid.length === 0) return p
+      return { ...p, activeCats: valid }
     })
   }
 

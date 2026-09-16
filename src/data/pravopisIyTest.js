@@ -30,7 +30,7 @@ export const PRAVOPIS_IY_AN_TEST = [
     difficulty: 'zacatecnik',
     points: 2,
     display: 'Pravopis i/y — svazek 2',
-    correct: 'rozviklané, narušily, výzev',
+    correct: 'rozviklané, narušily',
     hint: null,
     payload: {
       prompt: 'Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.',
@@ -38,12 +38,12 @@ export const PRAVOPIS_IY_AN_TEST = [
         { id: '1', text: 'To staré rozvyklané zábradlí se musí vyměnit.', correct: false },
         { id: '2', text: 'Na půdě jsem našel několik papírových sáčků.', correct: true },
         { id: '3', text: 'Náš plánovaný pobyt narušili nečekané okolnosti.', correct: false },
-        { id: '4', text: 'Opakované výzvy jsem si všiml až na poslední chvíli.', correct: false },
+        { id: '4', text: 'Opakované výzvy jsem si všiml až na poslední chvíli.', correct: true },
       ],
     },
     explanation:
       'rozvyklané → rozviklané (viklat). okolnosti (rod ženský) → narušily. '
-      + 'všimnout si + 2. pád: Opakovaných výzev jsem si všiml (ne „výzvy“).',
+      + 'všimnout si + 2. pád: výzvy = 2. pád j. č. (výzva), věta je správně.',
     sourceText: null,
   },
 ]

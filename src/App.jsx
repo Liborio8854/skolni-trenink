@@ -39,7 +39,9 @@ export default function App() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [answerMs, setAnswerMs] = useState(null);
   const [lastEval, setLastEval] = useState(null);
+  const [catHint, setCatHint] = useState(null);
   const startRef = useRef(null);
+  const catHintRef = useRef(null);
   const timerRef = useRef(null);
   const hintRef = useRef(null);
   const skipRef = useRef(null);
@@ -342,6 +344,12 @@ export default function App() {
   };
 
   const toggleCat = (id) => {
+    if (activeCats.includes(id) && activeCats.length <= 1) {
+      setCatHint("Musí zůstat alespoň jedna kategorie");
+      clearTimeout(catHintRef.current);
+      catHintRef.current = setTimeout(() => setCatHint(null), 2000);
+      return;
+    }
     persistActiveCats(prev => {
       const cur = prev?.length ? prev : CATS.map(c => c.id);
       if (cur.includes(id)) {
@@ -475,7 +483,7 @@ export default function App() {
           </div>
 
           {/* Categories */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: catHint ? 12 : 24 }}>
             {CATS.map((cat, i) => {
               const on = activeCats.includes(cat.id);
               return (
@@ -505,6 +513,13 @@ export default function App() {
               );
             })}
           </div>
+
+          {catHint && (
+            <div style={{
+              textAlign: "center", marginBottom: 24, fontSize: 13,
+              color: "#FFD166", fontWeight: 700, animation: "fadeIn .2s ease",
+            }}>{catHint}</div>
+          )}
 
           {activeCats.length >= 2 && (
             <div style={{
