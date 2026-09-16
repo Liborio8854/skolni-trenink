@@ -5,9 +5,11 @@ import { generateQuestions } from "./utils/questions";
 import { evaluateAnswer } from "./utils/evaluate";
 import { glass, glassStrong, glassBadge, bgStyle, wrapStyle, BgBlobs } from "./utils/styles";
 import { useProgress } from "./hooks/useProgress";
+import { useAuth } from "./hooks/useAuth";
 import { initAudio, playCorrect, playWrong, playTimeout, playResultGreat, playResultOk, playResultBad } from "./utils/sounds";
 import TimerRing from "./components/TimerRing";
 import ConfettiBurst from "./components/ConfettiBurst";
+import AuthScreen from "./components/AuthScreen";
 import AnSvazekQuestion from "./components/AnSvazekQuestion";
 import OtevrenaQuestion from "./components/OtevrenaQuestion";
 import OtevrenaMultiQuestion from "./components/OtevrenaMultiQuestion";
@@ -20,6 +22,7 @@ import PrirazovaniQuestion from "./components/PrirazovaniQuestion";
 // ── MAIN APP ────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const { session, loading: authLoading, authError, signIn, signUp, signOut } = useAuth();
   const { progress, addCorrect, addWrong, addRound, addError, addCoins, setActiveCats: persistActiveCats, spendCoins, startSession, endSession, discardSession, getTodayTime, getWeekTime, formatTime } = useProgress();
   const [soundOn, setSoundOn] = useState(true);
   const [screen, setScreen] = useState("dashboard");
@@ -401,6 +404,28 @@ export default function App() {
   const bg = bgStyle;
   const wrap = wrapStyle;
 
+  if (authLoading) {
+    return (
+      <div style={bgStyle}>
+        <BgBlobs />
+        <div style={{ ...wrapStyle, textAlign: "center", paddingTop: 120, color: "#8892A8", fontWeight: 700 }}>
+          Načítám…
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <AuthScreen
+        onSignIn={signIn}
+        onSignUp={signUp}
+        error={authError}
+        busy={false}
+      />
+    );
+  }
+
   // ═════════ DASHBOARD ═════════
 
   if (screen === "dashboard") {
@@ -426,6 +451,14 @@ export default function App() {
                   padding: "6px 12px", fontSize: 16,
                 }}
               >{soundOn ? "🔊" : "🔇"}</button>
+              <button
+                onClick={signOut}
+                title="Odhlásit"
+                style={{
+                  ...glassBadge, cursor: "pointer",
+                  padding: "6px 12px", fontSize: 13, color: "#8892A8",
+                }}
+              >Odhlásit</button>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <div style={{ ...glassBadge, display: "flex", alignItems: "center", gap: 5 }}>⭐ {stars}</div>
