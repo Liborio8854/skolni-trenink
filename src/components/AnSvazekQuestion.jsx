@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { glass, glassStrong } from '../utils/styles'
+import { shuffle } from '../utils/questions'
 
 /**
  * A/N svazek — 4 tvrzení, u každého ANO/NE.
@@ -7,7 +8,7 @@ import { glass, glassStrong } from '../utils/styles'
  * evaluation = výsledek evaluateAnswer (po odeslání).
  */
 export default function AnSvazekQuestion({ question, submitted, evaluation, onSubmit }) {
-  const statements = question.payload?.statements || []
+  const [statements] = useState(() => shuffle([...(question.payload?.statements || [])]))
   const [answers, setAnswers] = useState({})
 
   const allAnswered = statements.length > 0 && statements.every(s => answers[s.id] === true || answers[s.id] === false)

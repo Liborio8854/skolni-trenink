@@ -7,29 +7,28 @@ function result({ correct, pointsEarned, pointsMax, detail = {} }) {
   return { correct, pointsEarned, pointsMax, detail }
 }
 
-/** Výběr jedné odpovědi (ABCD) — vše nebo nic. */
+/** Výběr jedné odpovědi (ABCD) — vše nebo nic. Správnost podle option id, ne podle pořadí na obrazovce. */
 function evaluateVyber(question, userAnswer) {
   const pointsMax = question.points ?? 1
   const payload = question.payload
+  const correctId = payload?.correctOptionId != null
+    ? String(payload.correctOptionId)
+    : (question.correctIdx != null ? String(question.correctIdx) : null)
 
-  // Nový model: payload.correctOptionId
-  if (payload?.correctOptionId != null) {
-    let selectedId = userAnswer == null ? null : String(userAnswer)
+  let selectedId = null
+  if (userAnswer != null && userAnswer !== -1) {
+    selectedId = String(userAnswer)
+  }
 
-    // UI zatím posílá index možnosti → mapuj na option.id
-    if (typeof userAnswer === 'number' && Array.isArray(payload.options)) {
-      const opt = payload.options[userAnswer]
-      if (opt) selectedId = String(opt.id)
-    }
-
-    const correct = selectedId === String(payload.correctOptionId)
+  if (correctId != null) {
+    const correct = selectedId === correctId
     return result({
       correct,
       pointsEarned: correct ? pointsMax : 0,
       pointsMax,
       detail: {
         selectedOptionId: selectedId,
-        correctOptionId: String(payload.correctOptionId),
+        correctOptionId: correctId,
       },
     })
   }

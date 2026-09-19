@@ -22,6 +22,30 @@ export function shuffle(a) {
   return b
 }
 
+/** Možnosti typu vyber s id — zamíchat při každém zobrazení. Vyhodnocení jde podle id, ne indexu. */
+export function shuffledVyberOptions(question) {
+  if (!question) return []
+  const payloadOpts = question.payload?.options
+  if (Array.isArray(payloadOpts) && payloadOpts.length > 0) {
+    return shuffle(payloadOpts.map((o, i) => ({
+      id: String(o?.id ?? i),
+      text: typeof o === 'string' ? o : o.text,
+    })))
+  }
+  return shuffle((question.options || []).map((text, i) => ({
+    id: String(i),
+    text,
+  })))
+}
+
+export function vyberCorrectOptionId(question) {
+  if (question?.payload?.correctOptionId != null) {
+    return String(question.payload.correctOptionId)
+  }
+  if (question?.correctIdx != null) return String(question.correctIdx)
+  return null
+}
+
 export function genMath(type) {
   if (type === 'nasobilka') {
     const a = 2 + Math.floor(Math.random() * 9)

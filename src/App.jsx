@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { CATS, MOTIVACE, SPATNE, ROUND_SIZE } from "./data/constants";
 import { getCategory } from "./data/categories";
-import { generateQuestions } from "./utils/questions";
+import { generateQuestions, shuffledVyberOptions, vyberCorrectOptionId } from "./utils/questions";
 import { evaluateAnswer } from "./utils/evaluate";
 import { glass, glassStrong, glassBadge, bgStyle, wrapStyle, BgBlobs } from "./utils/styles";
 import { useProgress } from "./hooks/useProgress";
@@ -18,6 +18,22 @@ import PrirazovaniQuestion from "./components/PrirazovaniQuestion";
 /* ════════════════════════════════════════════════════════════════════════════
    ŠKOLNÍ TRÉNINK — v1
    ════════════════════════════════════════════════════════════════════════════ */
+
+function ShuffledVyberButtons({ question, answered, onPick, btnStyle, optionState }) {
+  const [options] = useState(() => shuffledVyberOptions(question));
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+      {options.map(opt => (
+        <button
+          key={opt.id}
+          style={btnStyle(optionState(opt))}
+          onClick={() => onPick(opt)}
+          disabled={answered !== null}
+        >{opt.text}</button>
+      ))}
+    </div>
+  );
+}
 
 // ── MAIN APP ────────────────────────────────────────────────────────────────
 
@@ -248,14 +264,14 @@ export default function App() {
     setTimeout(advanceQuestion, delayMs);
   };
 
-  const handleAnswer = (idx) => {
+  const handleAnswer = (opt) => {
     if (answered !== null) return;
     clearTimers();
     initAudio();
-    setAnswered(idx);
+    setAnswered(opt.id);
 
-    const evaluation = evaluateAnswer(q, idx);
-    applyEvaluation(evaluation, q.options[idx], 1200);
+    const evaluation = evaluateAnswer(q, opt.id);
+    applyEvaluation(evaluation, opt.text, 1200);
   };
 
   const handleAnSvazekAnswer = (userAnswers) => {
@@ -603,10 +619,11 @@ export default function App() {
     const isOtevrenaMulti = q.type === "otevrena-multi";
     const isPrirazovani = q.type === "prirazovani";
 
-    const getState = (idx) => {
+    const optionState = (opt) => {
       if (answered === null) return null;
-      if (idx === q.correctIdx) return "correct";
-      if (idx === answered && answered !== -1) return "wrong";
+      const correctId = vyberCorrectOptionId(q);
+      if (correctId != null && String(opt.id) === correctId) return "correct";
+      if (answered !== -1 && String(opt.id) === String(answered)) return "wrong";
       return null;
     };
 
@@ -791,17 +808,14 @@ export default function App() {
                 </div>
               )}
 
-              {/* Options */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                {q.options.map((opt, idx) => (
-                  <button
-                    key={idx}
-                    style={btnStyle(getState(idx))}
-                    onClick={() => handleAnswer(idx)}
-                    disabled={answered !== null}
-                  >{opt}</button>
-                ))}
-              </div>
+              <ShuffledVyberButtons
+                key={`${qIdx}-${q.id || q.display || ""}`}
+                question={q}
+                answered={answered}
+                onPick={handleAnswer}
+                btnStyle={btnStyle}
+                optionState={optionState}
+              />
 
               {answered !== null && q.explanation && (
                 <div style={{

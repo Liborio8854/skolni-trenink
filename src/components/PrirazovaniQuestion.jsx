@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { glass, glassStrong } from '../utils/styles'
+import { shuffle } from '../utils/questions'
 
 function previewText(text, max = 36) {
   const t = String(text || '').trim()
@@ -13,8 +14,8 @@ function previewText(text, max = 36) {
  */
 export default function PrirazovaniQuestion({ question, submitted, evaluation, onSubmit }) {
   const payload = question.payload || {}
-  const items = payload.items || []
-  const options = payload.options || []
+  const [items] = useState(() => shuffle([...(payload.items || [])]))
+  const [options] = useState(() => shuffle([...(payload.options || [])]))
   const [mapping, setMapping] = useState({})
 
   const allAssigned = items.length > 0 && items.every(item => mapping[item.id])
