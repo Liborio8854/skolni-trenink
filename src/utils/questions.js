@@ -212,13 +212,13 @@ function generateOne(cat, difficulty, ctx) {
     }
   }
 
-  // Bankové kategorie — různé formáty podle dostupných otázek
-  if (BANK_CATS.has(cat)) {
+  // Bankové kategorie (pravopis-iy, …) — ber otázky z QUESTION_BANK
+  const bankQs = getBankQuestions(cat)
+  if (bankQs.length > 0) {
     if (!ctx.bankPools[cat] || ctx.bankPools[cat].idx >= ctx.bankPools[cat].pool.length) {
-      ctx.bankPools[cat] = { pool: shuffle(getBankQuestions(cat)), idx: 0 }
+      ctx.bankPools[cat] = { pool: shuffle([...bankQs]), idx: 0 }
     }
     const bp = ctx.bankPools[cat]
-    if (bp.pool.length === 0) return null
     if (bp.idx >= bp.pool.length) bp.idx = 0
     const q = bp.pool[bp.idx++]
     return { ...q, fromErrorLog: false, errorDetail: null }
@@ -238,28 +238,63 @@ function errorEntryToQuestion(entry) {
 
 /**
  * Zamíchá 2–3 otázky z chybníku do kola — ne na začátek.
+ * Jen chyby z aktivních kategorií; nahradí se jen otázka, která v kole není jediná ze své kategorie.
  */
-function injectErrorLogQuestions(questions, errorLog) {
+function injectErrorLogQuestions(questions, errorLog, activeCats = []) {
   if (!errorLog?.length || questions.length < 3) return questions
 
-  const want = Math.min(2 + Math.floor(Math.random() * 2), errorLog.length, questions.length - 2)
+  const allowed = new Set(activeCats)
   const candidates = shuffle(
     errorLog
+      .filter(e => {
+        const cat = e.question?.category || e.category
+        return !allowed.size || allowed.has(cat)
+      })
       .map(errorEntryToQuestion)
       .filter(Boolean)
-  ).slice(0, want)
+  )
 
   if (candidates.length === 0) return questions
 
+  const want = Math.min(2 + Math.floor(Math.random() * 2), candidates.length, questions.length - 2)
   const result = [...questions]
-  // Pozice od indexu 2 dál (ne začátek)
-  const slots = shuffle(
-    Array.from({ length: result.length - 2 }, (_, i) => i + 2)
-  ).slice(0, candidates.length)
+  const counts = {}
+  for (const q of result) {
+    if (q?.category) counts[q.category] = (counts[q.category] || 0) + 1
+  }
+  const usedIds = new Set(result.map(q => q.id).filter(Boolean))
 
-  slots.forEach((slot, i) => {
-    result[slot] = candidates[i]
-  })
+  let injected = 0
+  for (const cand of candidates) {
+    if (injected >= want) break
+    if (cand.id && usedIds.has(cand.id)) continue
+
+    let slot = -1
+    for (let i = 2; i < result.length; i++) {
+      const cat = result[i]?.category
+      if (cat && cat === cand.category && (counts[cat] || 0) > 1) {
+        slot = i
+        break
+      }
+    }
+    if (slot < 0) {
+      for (let i = 2; i < result.length; i++) {
+        const cat = result[i]?.category
+        if (cat && (counts[cat] || 0) > 1) {
+          slot = i
+          break
+        }
+      }
+    }
+    if (slot < 0) break
+
+    const replacedCat = result[slot].category
+    counts[replacedCat] = (counts[replacedCat] || 1) - 1
+    counts[cand.category] = (counts[cand.category] || 0) + 1
+    result[slot] = cand
+    if (cand.id) usedIds.add(cand.id)
+    injected++
+  }
 
   return result
 }
@@ -282,28 +317,28 @@ export function generateQuestions(activeCats, _difficulty = 'advanced', errorLog
     bankPools: {},
   }
 
+  // Round-robin: každá vybraná kategorie dostane slot dřív, než kterákoli dostane druhý.
+  // Jinak první položky v CATS (vyjna, předpony, násobilka, počítání) sežerou celé kolo.
   const questions = []
-  const perCat = Math.ceil(ROUND_SIZE / activeCats.length)
-
-  for (const cat of activeCats) {
-    for (let i = 0; i < perCat && questions.length < ROUND_SIZE; i++) {
-      const q = generateOne(cat, difficulty, ctx)
-      if (q) questions.push(q)
-    }
-  }
-
-  // Doplň, pokud nějaká kategorie nevrátila dost otázek
+  const exhausted = new Set()
   let guard = 0
-  while (questions.length < ROUND_SIZE && guard < 50) {
+  let cursor = 0
+  while (questions.length < ROUND_SIZE && guard < ROUND_SIZE * activeCats.length + 20) {
     guard++
-    const cat = activeCats[questions.length % activeCats.length]
+    const remaining = activeCats.filter(c => !exhausted.has(c))
+    if (remaining.length === 0) break
+    const cat = remaining[cursor % remaining.length]
+    cursor++
     const q = generateOne(cat, difficulty, ctx)
-    if (q) questions.push(q)
-    else break
+    if (!q) {
+      exhausted.add(cat)
+      continue
+    }
+    questions.push(q)
   }
 
   let round = shuffle(questions).slice(0, ROUND_SIZE)
-  round = injectErrorLogQuestions(round, errorLog)
+  round = injectErrorLogQuestions(round, errorLog, activeCats)
   return round.slice(0, ROUND_SIZE)
 }
 

@@ -802,6 +802,14 @@ export default function App() {
                   >{opt}</button>
                 ))}
               </div>
+
+              {answered !== null && q.explanation && (
+                <div style={{
+                  textAlign: "left", fontSize: 13, color: "#8892A8",
+                  fontStyle: "italic", lineHeight: 1.45, marginBottom: 8,
+                  animation: "fadeIn .3s ease",
+                }}>{q.explanation}</div>
+              )}
             </>
           )}
 

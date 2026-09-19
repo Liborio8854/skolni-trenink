@@ -1,0 +1,554 @@
+[
+  {
+    "id": "cj-pravopis-iy-0001",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "zacatecnik",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "Kluci si na hřišti kopali s míčem.", "correct": true },
+        { "id": "2", "text": "Holky si na hřišti kopali s míčem.", "correct": false },
+        { "id": "3", "text": "Ptáci na krmítku zobali semínka.", "correct": true },
+        { "id": "4", "text": "Slepice na dvoře zobali zrní.", "correct": false }
+      ]
+    },
+    "explanation": "Podmět rodu mužského životného (kluci, ptáci) má v příčestí -i: kopali, zobali. Podmět rodu ženského (holky, slepice) má -y: kopaly, zobaly."
+  },
+  {
+    "id": "cj-pravopis-iy-0002",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "zacatecnik",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "V nové škole budeme bydlet od září.", "correct": true },
+        { "id": "2", "text": "Petr mě včera byl do ruky.", "correct": false },
+        { "id": "3", "text": "Na statku mají hodně dobytka.", "correct": true },
+        { "id": "4", "text": "V obýváku stojí nový nabitek.", "correct": false }
+      ]
+    },
+    "explanation": "bydlet, dobytek i nábytek patří k vyjmenovaným slovům po b (být). bít (udeřit) se píše s i — minulý čas bil, ne byl."
+  },
+  {
+    "id": "cj-pravopis-iy-0003",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "zacatecnik",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "Na lyžích sjíždíme z kopce.", "correct": true },
+        { "id": "2", "text": "Po pádu mě bolelo lítko.", "correct": false },
+        { "id": "3", "text": "Strom má na kmeni hrubé lýko.", "correct": true },
+        { "id": "4", "text": "Na hlavě má velkou lisinu.", "correct": false }
+      ]
+    },
+    "explanation": "lyže, lýko, lýtko a lysina patří k vyjmenovaným slovům po l. Správně je tedy lýtko a lysina, ne lítko a lisina."
+  },
+  {
+    "id": "cj-pravopis-iy-0004",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "zacatecnik",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "Honza si po jídle umyje ruce mýdlem.", "correct": true },
+        { "id": "2", "text": "V komoře se zabydlel hmyz.", "correct": true },
+        { "id": "3", "text": "Pod skříní běhala malá miš.", "correct": false },
+        { "id": "4", "text": "Učitel chtěl, abychom o úloze misleli.", "correct": false }
+      ]
+    },
+    "explanation": "mýt/mýdlo, hmyz, myš i myslet patří k vyjmenovaným slovům po m. Správně je myš a mysleli, ne miš a misleli."
+  },
+  {
+    "id": "cj-pravopis-iy-0005",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "zacatecnik",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "Dědeček vysypal pytel brambor.", "correct": true },
+        { "id": "2", "text": "Kůň zvedl zadní kopyto.", "correct": true },
+        { "id": "3", "text": "Z květů létá do vzduchu pil.", "correct": false },
+        { "id": "4", "text": "Za svou chybu bude pikat.", "correct": false }
+      ]
+    },
+    "explanation": "pytel, kopyto, pyl a pykat patří k vyjmenovaným slovům po p. Správně je pyl a pykat. pil by bylo od slova pít."
+  },
+  {
+    "id": "cj-pravopis-iy-0006",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "zacatecnik",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "Syn pomáhal otci v dílně.", "correct": true },
+        { "id": "2", "text": "Na krmítku seděla sýkora.", "correct": true },
+        { "id": "3", "text": "K snídani máme čerstvý sír.", "correct": false },
+        { "id": "4", "text": "Po obědě už byl sitý.", "correct": false }
+      ]
+    },
+    "explanation": "syn, sýkora, sýr a sytý patří k vyjmenovaným slovům po s. Správně je sýr a sytý, ne sír a sitý."
+  },
+  {
+    "id": "cj-pravopis-iy-0007",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "zacatecnik",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "Na skále hnízdí výr.", "correct": true },
+        { "id": "2", "text": "V noci bylo slyšet vítí vlků.", "correct": false },
+        { "id": "3", "text": "Pes si zvykl na novou boudu.", "correct": true },
+        { "id": "4", "text": "Ve větvích vyskal pták.", "correct": false }
+      ]
+    },
+    "explanation": "výr, výt a zvyknout/zvyk patří k vyjmenovaným slovům po v; výskat také. Správně je vytí (od výt) a výskal. vítí a vyskal jsou chybně."
+  },
+  {
+    "id": "cj-pravopis-iy-0008",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "zacatecnik",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "Závodnice doběhly do cíle první.", "correct": true },
+        { "id": "2", "text": "Závodníci doběhly do cíle první.", "correct": false },
+        { "id": "3", "text": "Naše kočky ležely na gauči.", "correct": true },
+        { "id": "4", "text": "Naši psi ležely na gauči.", "correct": false }
+      ]
+    },
+    "explanation": "Závodnice a kočky jsou rod ženský → doběhly, ležely. Závodníci a psi jsou rod mužský životný → doběhli, leželi."
+  },
+  {
+    "id": "cj-pravopis-iy-0009",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "pokrocily",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "Staré hrady stály na kopcích.", "correct": true },
+        { "id": "2", "text": "Staré hrady stáli na kopcích.", "correct": false },
+        { "id": "3", "text": "Malá koťata spala v košíku.", "correct": true },
+        { "id": "4", "text": "Malá koťata spaly v košíku.", "correct": false }
+      ]
+    },
+    "explanation": "Hrady jsou rod mužský neživotný → příčestí -y: stály. Koťata jsou rod střední v množném čísle → příčestí -a: spala."
+  },
+  {
+    "id": "cj-pravopis-iy-0010",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "pokrocily",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "Děti si hrály na zahradě.", "correct": true },
+        { "id": "2", "text": "Děti si hráli na zahradě.", "correct": false },
+        { "id": "3", "text": "Lidé spěchali na autobus.", "correct": true },
+        { "id": "4", "text": "Lidé spěchaly na autobus.", "correct": false }
+      ]
+    },
+    "explanation": "Děti mají v příčestí koncovku -y: hrály. Lidé jsou rod mužský životný → spěchali."
+  },
+  {
+    "id": "cj-pravopis-iy-0011",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "pokrocily",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "Tento potok je velmi bystrý.", "correct": true },
+        { "id": "2", "text": "Na louce rostla léčivá bilina.", "correct": false },
+        { "id": "3", "text": "Jsme obyvatelé malé obce.", "correct": true },
+        { "id": "4", "text": "Obilí na poli už dozrávalo.", "correct": true }
+      ]
+    },
+    "explanation": "bystrý, bylina a obyvatelé patří k vyjmenovaným slovům po b. obilí mezi ně nepatří, píše se s i."
+  },
+  {
+    "id": "cj-pravopis-iy-0012",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "pokrocily",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "Po nemoci zůstal úplně lysý.", "correct": true },
+        { "id": "2", "text": "Malina na keři už zčervenala.", "correct": true },
+        { "id": "3", "text": "Při pláči začala vzlikat.", "correct": false },
+        { "id": "4", "text": "Lípa u kostela je stará.", "correct": true }
+      ]
+    },
+    "explanation": "lysý a vzlykat patří k vyjmenovaným slovům po l. malina a lípa mezi ně nepatří, píší se s i."
+  },
+  {
+    "id": "cj-pravopis-iy-0013",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "pokrocily",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "Myslivec šel ráno do honitby.", "correct": true },
+        { "id": "2", "text": "Po práci si umyl ruce mýdlem.", "correct": true },
+        { "id": "3", "text": "Dej mi sladkou mísu malin.", "correct": true },
+        { "id": "4", "text": "Na misce leželo nové mídlo.", "correct": false }
+      ]
+    },
+    "explanation": "myslivec (mysl), mýt a mýdlo patří k vyjmenovaným slovům po m. mísa mezi ně nepatří, píše se s í."
+  },
+  {
+    "id": "cj-pravopis-iy-0014",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "pokrocily",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "Tráva na mezi byla plná pýru.", "correct": true },
+        { "id": "2", "text": "Ve tmě se třpitily hvězdy.", "correct": false },
+        { "id": "3", "text": "Kůň začal na kameni klopýtat.", "correct": true },
+        { "id": "4", "text": "Na písčité cestě bylo hodně písku.", "correct": true }
+      ]
+    },
+    "explanation": "pýr, třpytit se a klopýtat patří k vyjmenovaným slovům po p. písek mezi ně nepatří, píše se s í."
+  },
+  {
+    "id": "cj-pravopis-iy-0015",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "pokrocily",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "Na podzim bylo sychravo.", "correct": true },
+        { "id": "2", "text": "Sysel seděl u nory.", "correct": true },
+        { "id": "3", "text": "Osika šuměla ve větru.", "correct": true },
+        { "id": "4", "text": "Na větvi seděla sikora.", "correct": false }
+      ]
+    },
+    "explanation": "sychravý, sysel a sýkora patří k vyjmenovaným slovům po s. osika mezi ně nepatří, píše se s i."
+  },
+  {
+    "id": "cj-pravopis-iy-0016",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "pokrocily",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "Vydra plavala v řece.", "correct": true },
+        { "id": "2", "text": "Vítr ohnul vysoké topoly.", "correct": true },
+        { "id": "3", "text": "Pes začal v noci vít na měsíc.", "correct": false },
+        { "id": "4", "text": "Musíme si vyzkoušet nové lyže.", "correct": true }
+      ]
+    },
+    "explanation": "vydra a vysoký patří k vyjmenovaným slovům po v; výt také, proto výt, ne vít. vítr se píše s í (není vyjmenované). předpona vy- se vždy píše s y."
+  },
+  {
+    "id": "cj-pravopis-iy-0017",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "pokrocily",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "Koupili jsme ryzí zlatý prsten.", "correct": true },
+        { "id": "2", "text": "Koupili jsme ryzý zlatý prsten.", "correct": false },
+        { "id": "3", "text": "Po ránu byl cítit jarní vánek.", "correct": true },
+        { "id": "4", "text": "Po ránu byl cítit jarný vánek.", "correct": false }
+      ]
+    },
+    "explanation": "ryzí a jarní jsou měkká přídavná jména (vzor jarní), v 1. pádě mají -í, ne -ý. zlatý je tvrdé přídavné jméno, to je v pořádku."
+  },
+  {
+    "id": "cj-pravopis-iy-0018",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "an-svazek",
+    "difficulty": "pokrocily",
+    "points": 2,
+    "payload": {
+      "prompt": "Rozhodni o každé z následujících vět, zda je zapsána pravopisně správně.",
+      "statements": [
+        { "id": "1", "text": "Cizí lidé nám ochotně poradili.", "correct": true },
+        { "id": "2", "text": "Cizý lidé nám ochotně poradili.", "correct": false },
+        { "id": "3", "text": "První vlaštovky přiletěly v březnu.", "correct": true },
+        { "id": "4", "text": "První vlaštovky přiletěli v březnu.", "correct": false }
+      ]
+    },
+    "explanation": "cizí a první jsou měkká přídavná jména, píší se s í. vlaštovky jsou rod ženský → přiletěly. lidé jsou rod mužský životný → poradili."
+  },
+  {
+    "id": "cj-pravopis-iy-0019",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "vyber",
+    "difficulty": "zacatecnik",
+    "points": 1,
+    "payload": {
+      "prompt": "Která z následujících vět NENÍ zapsána pravopisně správně?",
+      "options": [
+        { "id": "a", "text": "V novém bytě je hodně světla." },
+        { "id": "b", "text": "Kobyla s hříbětem stála ve stáji." },
+        { "id": "c", "text": "Na pastvině se pásl dobytek." },
+        { "id": "d", "text": "V pokoji postavili nový nabitek." }
+      ],
+      "correctOptionId": "d"
+    },
+    "explanation": "Správně je nábytek — příbuzné k vyjmenovanému být. byt, kobyla i dobytek jsou zapsány správně."
+  },
+  {
+    "id": "cj-pravopis-iy-0020",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "vyber",
+    "difficulty": "zacatecnik",
+    "points": 1,
+    "payload": {
+      "prompt": "Která z následujících vět NENÍ zapsána pravopisně správně?",
+      "options": [
+        { "id": "a", "text": "Lýko stromu je světlé." },
+        { "id": "b", "text": "Lyže má nabroušené hrany." },
+        { "id": "c", "text": "Po nemoci měl lysinu na temeni." },
+        { "id": "d", "text": "Bolí ho pravé lítko." }
+      ],
+      "correctOptionId": "d"
+    },
+    "explanation": "Správně je lýtko — vyjmenované slovo po l. lýko, lyže i lysina jsou zapsány správně."
+  },
+  {
+    "id": "cj-pravopis-iy-0021",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "vyber",
+    "difficulty": "zacatecnik",
+    "points": 1,
+    "payload": {
+      "prompt": "Která z následujících vět NENÍ zapsána pravopisně správně?",
+      "options": [
+        { "id": "a", "text": "Umyl si ruce teplou vodou." },
+        { "id": "b", "text": "Myš běhala pod skříní." },
+        { "id": "c", "text": "Hmyz létal kolem lampy." },
+        { "id": "d", "text": "Na stole leželo tvrdé midlo." }
+      ],
+      "correctOptionId": "d"
+    },
+    "explanation": "Správně je mýdlo — příbuzné k mýt. umyl, myš i hmyz patří k vyjmenovaným slovům po m."
+  },
+  {
+    "id": "cj-pravopis-iy-0022",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "vyber",
+    "difficulty": "zacatecnik",
+    "points": 1,
+    "payload": {
+      "prompt": "Která z následujících vět NENÍ zapsána pravopisně správně?",
+      "options": [
+        { "id": "a", "text": "Pytel mouky stál ve spíži." },
+        { "id": "b", "text": "Z květů vířil žlutý pyl." },
+        { "id": "c", "text": "Kůň zvedl zadní kopyto." },
+        { "id": "d", "text": "Za pozdní příchod bude pikat." }
+      ],
+      "correctOptionId": "d"
+    },
+    "explanation": "Správně je pykat. pytel, pyl i kopyto patří k vyjmenovaným slovům po p."
+  },
+  {
+    "id": "cj-pravopis-iy-0023",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "vyber",
+    "difficulty": "zacatecnik",
+    "points": 1,
+    "payload": {
+      "prompt": "Která z následujících vět NENÍ zapsána pravopisně správně?",
+      "options": [
+        { "id": "a", "text": "Synovec přijede v sobotu." },
+        { "id": "b", "text": "Sýkora zobe slunečnici." },
+        { "id": "c", "text": "K snídani dostal krajíc chleba se sírem." },
+        { "id": "d", "text": "Po výletu byli všichni sytí." }
+      ],
+      "correctOptionId": "c"
+    },
+    "explanation": "Správně je sýrem. synovec, sýkora i sytý patří k vyjmenovaným slovům po s."
+  },
+  {
+    "id": "cj-pravopis-iy-0024",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "vyber",
+    "difficulty": "zacatecnik",
+    "points": 1,
+    "payload": {
+      "prompt": "Která z následujících vět NENÍ zapsána pravopisně správně?",
+      "options": [
+        { "id": "a", "text": "Vydra se potápěla pro rybu." },
+        { "id": "b", "text": "Výr zahoukal ze skály." },
+        { "id": "c", "text": "Pes si zvykl na jméno." },
+        { "id": "d", "text": "Vlk začal v noci vít na měsíc." }
+      ],
+      "correctOptionId": "d"
+    },
+    "explanation": "Správně je výt (vyjmenované slovo po v). vydra, výr i zvykl jsou zapsány správně."
+  },
+  {
+    "id": "cj-pravopis-iy-0025",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "vyber",
+    "difficulty": "pokrocily",
+    "points": 1,
+    "payload": {
+      "prompt": "Která z následujících vět NENÍ zapsána pravopisně správně?",
+      "options": [
+        { "id": "a", "text": "Žáci odevzdali sešity včas." },
+        { "id": "b", "text": "Holky odevzdaly sešity včas." },
+        { "id": "c", "text": "Rodiče čekali před školou." },
+        { "id": "d", "text": "Sousedovy kočky čekali před vraty." }
+      ],
+      "correctOptionId": "d"
+    },
+    "explanation": "Kočky jsou rod ženský → čekaly. žáci a rodiče jsou rod mužský životný → odevzdali, čekali. holky → odevzdaly."
+  },
+  {
+    "id": "cj-pravopis-iy-0026",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "vyber",
+    "difficulty": "pokrocily",
+    "points": 1,
+    "payload": {
+      "prompt": "Která z následujících vět JE zapsána pravopisně správně?",
+      "options": [
+        { "id": "a", "text": "Dívky běželi k cíli." },
+        { "id": "b", "text": "Stromy rostli podél cesty." },
+        { "id": "c", "text": "Chlapci běželi k cíli." },
+        { "id": "d", "text": "Slepice zobali zrní." }
+      ],
+      "correctOptionId": "c"
+    },
+    "explanation": "Chlapci jsou rod mužský životný → běželi. Dívky a slepice (ženský rod) → běžely, zobaly. Stromy jsou mužský neživotný → rostly."
+  },
+  {
+    "id": "cj-pravopis-iy-0027",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "vyber",
+    "difficulty": "pokrocily",
+    "points": 1,
+    "payload": {
+      "prompt": "Která z následujících vět NENÍ zapsána pravopisně správně?",
+      "options": [
+        { "id": "a", "text": "Bystrý potok hučel v lese." },
+        { "id": "b", "text": "Obyvatelé obce se sešli na návsi." },
+        { "id": "c", "text": "Na zahradě rozkvetly bílé kopretiny." },
+        { "id": "d", "text": "Na poli dozrávalo obylí." }
+      ],
+      "correctOptionId": "d"
+    },
+    "explanation": "Správně je obilí — nepatří k vyjmenovaným slovům po b. bystrý a obyvatelé k nim patří. kopretiny se píší s i (nejsou příbuzné s pýrem)."
+  },
+  {
+    "id": "cj-pravopis-iy-0028",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "vyber",
+    "difficulty": "pokrocily",
+    "points": 1,
+    "payload": {
+      "prompt": "Která z následujících vět NENÍ zapsána pravopisně správně?",
+      "options": [
+        { "id": "a", "text": "Přinesl ryzí stříbrný řetízek." },
+        { "id": "b", "text": "Cítili jsme svěží ranní vzduch." },
+        { "id": "c", "text": "Byl to cizí zámek na okraji města." },
+        { "id": "d", "text": "Přinesl ryzý stříbrný řetízek." }
+      ],
+      "correctOptionId": "d"
+    },
+    "explanation": "ryzí, svěží, ranní i cizí jsou měkká přídavná jména (vzor jarní) a píší se s í. Tvar ryzý je chybný."
+  },
+  {
+    "id": "cj-pravopis-iy-0029",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "vyber",
+    "difficulty": "pokrocily",
+    "points": 1,
+    "payload": {
+      "prompt": "Která z následujících vět NENÍ zapsána pravopisně správně?",
+      "options": [
+        { "id": "a", "text": "Děti kreslily pastelkami." },
+        { "id": "b", "text": "Kuřata běhala po dvoře." },
+        { "id": "c", "text": "Havrani seděli na plotě." },
+        { "id": "d", "text": "Děti kreslili pastelkami." }
+      ],
+      "correctOptionId": "d"
+    },
+    "explanation": "Děti mají v příčestí -y: kreslily. Kuřata (rod střední) → běhala. Havrani (mužský životný) → seděli."
+  },
+  {
+    "id": "cj-pravopis-iy-0030",
+    "subject": "cestina",
+    "category": "pravopis-iy",
+    "type": "vyber",
+    "difficulty": "pokrocily",
+    "points": 1,
+    "payload": {
+      "prompt": "Která z následujících vět NENÍ zapsána pravopisně správně?",
+      "options": [
+        { "id": "a", "text": "Slyšeli jsme zpěv sýkor." },
+        { "id": "b", "text": "Lípa má široké listy." },
+        { "id": "c", "text": "Malina na keři už dozrála." },
+        { "id": "d", "text": "Po běhu ho bolelo lítko." }
+      ],
+      "correctOptionId": "d"
+    },
+    "explanation": "Správně je lýtko (vyjmenované po l). slyšet a sýkora se píší s y; lípa a malina k vyjmenovaným po l nepatří, proto i."
+  }
+]

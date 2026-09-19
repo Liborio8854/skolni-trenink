@@ -1,11 +1,33 @@
-import { PRAVOPIS_IY_AN_TEST } from './pravopisIyTest'
+import pravopisIy from '../../data/pravopis-iy.json' with { type: 'json' }
 import { OTEVRENA_TEST } from './otevrenaTest'
 import { OTEVRENA_MULTI_TEST } from './otevrenaMultiTest'
 import { PRIRAZOVANI_TEST } from './prirazovaniTest'
 
-/** Banka otázek nových formátů (zatím testovací obsah). */
+/** Doplní display / options / correctIdx, aby JSON ze specifikace fungoval ve stávajícím UI. */
+function normalizeQuestion(q) {
+  const next = { ...q }
+  if (!next.display && next.payload?.prompt) {
+    next.display = next.payload.prompt
+  }
+  if (next.type === 'vyber' && Array.isArray(next.payload?.options)) {
+    const opts = next.payload.options
+    next.options = opts.map(o => (typeof o === 'string' ? o : o.text))
+    if (next.payload.correctOptionId != null) {
+      const id = String(next.payload.correctOptionId)
+      next.correctIdx = opts.findIndex(o => String(o?.id ?? o) === id)
+    }
+    if (next.correct == null && next.correctIdx >= 0) {
+      next.correct = next.options[next.correctIdx]
+    }
+  }
+  if (next.hint === undefined) next.hint = null
+  if (next.sourceText === undefined) next.sourceText = null
+  return next
+}
+
+/** Banka otázek nových formátů. */
 export const QUESTION_BANK = [
-  ...PRAVOPIS_IY_AN_TEST,
+  ...pravopisIy.map(normalizeQuestion),
   ...OTEVRENA_TEST,
   ...OTEVRENA_MULTI_TEST,
   ...PRIRAZOVANI_TEST,
