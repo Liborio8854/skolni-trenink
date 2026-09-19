@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
-import { migrateFromLocalStorage } from '../lib/migrate'
 
 export function useAuth() {
   const [session, setSession] = useState(null)
@@ -27,14 +26,6 @@ export function useAuth() {
       subscription.unsubscribe()
     }
   }, [])
-
-  useEffect(() => {
-    const userId = session?.user?.id
-    if (!userId) return
-    migrateFromLocalStorage(userId).catch(err => {
-      console.warn('Migrace z localStorage selhala:', err)
-    })
-  }, [session?.user?.id])
 
   const signIn = useCallback(async (email, password) => {
     setAuthError(null)

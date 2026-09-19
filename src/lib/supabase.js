@@ -10,3 +10,10 @@ if (!url || !anonKey) {
 }
 
 export const supabase = createClient(url || '', anonKey || '')
+
+/** Tabulky v Supabase mají prefix st_ (sdílený projekt). */
+export const TABLES = {
+  answers: 'st_answers',
+  userProgress: 'st_user_progress',
+  errorLog: 'st_error_log',
+}

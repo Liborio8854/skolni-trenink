@@ -22,8 +22,8 @@ import PrirazovaniQuestion from "./components/PrirazovaniQuestion";
 // ── MAIN APP ────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const { session, loading: authLoading, authError, signIn, signUp, signOut } = useAuth();
-  const { progress, addCorrect, addWrong, addRound, addError, addCoins, setActiveCats: persistActiveCats, spendCoins, startSession, endSession, discardSession, getTodayTime, getWeekTime, formatTime } = useProgress();
+  const { session, user, loading: authLoading, authError, signIn, signUp, signOut } = useAuth();
+  const { progress, addCorrect, addWrong, finishRound, addError, recordAnswer, setActiveCats: persistActiveCats, spendCoins, startSession, endSession, discardSession, getTodayTime, getWeekTime, formatTime } = useProgress(user?.id);
   const [soundOn, setSoundOn] = useState(true);
   const [screen, setScreen] = useState("dashboard");
   const activeCats = progress.activeCats?.length ? progress.activeCats : CATS.map(c => c.id);
@@ -93,6 +93,8 @@ export default function App() {
     setFbOk(false);
     setCombo(0);
     const q = questions[qRef.current];
+    const ms = Date.now() - (startRef.current || Date.now());
+    recordAnswer(q, { correct: false, pointsEarned: 0, pointsMax: q?.points ?? 1 }, ms);
     addWrong();
     if (q) addError(q, null);
     setResults(prev => [...prev, {
@@ -100,7 +102,7 @@ export default function App() {
       userAnswer: "⏱️ Čas vypršel", isCorrect: false, pointsEarned: 0, pointsMax: q?.points ?? 1,
     }]);
     setTimeout(advanceQuestion, 1500);
-  }, [questions, clearTimers, advanceQuestion, soundOn, addWrong, addError]);
+  }, [questions, clearTimers, advanceQuestion, soundOn, addWrong, addError, recordAnswer]);
 
   // Timers: odpočet u násobilky/počítání; jinak nápověda + přeskočení
   useEffect(() => {
@@ -138,10 +140,7 @@ export default function App() {
   useEffect(() => {
     if (screen === "results" && results.length > 0 && !roundCounted.current) {
       roundCounted.current = true;
-      addRound();
-      if (activeCats.length >= 2) {
-        addCoins(15);
-      }
+      finishRound(activeCats.length >= 2 ? 15 : 0);
       const size = results.length || roundSizeRef.current;
       const pct = Math.round((results.filter(r => r.isCorrect).length / size) * 100);
       if (pct > 80) {
@@ -188,6 +187,7 @@ export default function App() {
     const { correct: ok, pointsEarned, pointsMax } = evaluation;
     const partial = !ok && pointsEarned > 0;
     const detail = errorDetailFromEval(evaluation);
+    recordAnswer(q, evaluation, ms);
 
     // Mince: 10 plný / 5 částečný / 0 nula. Hvězdy: stávající logika (+ násobilka).
     if (ok) {
@@ -309,6 +309,8 @@ export default function App() {
     setFbText("Přeskočeno — půjde do chybníku 📝");
     setFbOk(false);
     setCombo(0);
+    const ms = Date.now() - (startRef.current || Date.now());
+    recordAnswer(q, { correct: false, pointsEarned: 0, pointsMax: q?.points ?? 1 }, ms);
     addWrong();
     addError(q, null);
     setResults(prev => [...prev, {

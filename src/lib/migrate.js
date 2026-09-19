@@ -1,4 +1,5 @@
-import { supabase } from './supabase'
+import { supabase, TABLES } from './supabase'
+import { mergeGameState } from './sync'
 
 const MIGRATED_KEY = 'migrated_to_supabase'
 const APP_STORAGE_KEY = 'skolni-trenink'
@@ -39,12 +40,17 @@ export async function migrateFromLocalStorage(userId) {
   }
 
   if (progress.stars || progress.coins || progress.streak) {
-    const { error } = await supabase.from('st_user_progress').upsert({
+    const { data: remote } = await supabase
+      .from(TABLES.userProgress)
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    const merged = mergeGameState(progress, remote)
+    const { error } = await supabase.from(TABLES.userProgress).upsert({
       user_id: userId,
-      stars: progress.stars || 0,
-      coins: progress.coins || 0,
-      streak_days: progress.streak || 0,
-      streak_last_day: progress.lastActiveDate || progress.lastDay || null,
+      ...merged,
+      updated_at: new Date().toISOString(),
     })
     if (error) {
       console.warn('Migrace st_user_progress selhala:', error.message)
@@ -55,11 +61,11 @@ export async function migrateFromLocalStorage(userId) {
   if (errorLog.length > 0) {
     const rows = errorLog
       .map(e => {
-        const questionId = e.questionId || e.question?.id || null
+        const questionId = e.questionId || e.question?.id || e.key || null
         if (!questionId) return null
         return {
           user_id: userId,
-          question_id: questionId,
+          question_id: String(questionId),
           wrong_count: e.wrong_count || e.count || 1,
           detail: e.detail ?? null,
         }
@@ -68,7 +74,7 @@ export async function migrateFromLocalStorage(userId) {
 
     if (rows.length > 0) {
       const { error } = await supabase
-        .from('st_error_log')
+        .from(TABLES.errorLog)
         .upsert(rows, { onConflict: 'user_id,question_id' })
       if (error) {
         // FK může selhat, dokud nejsou nahrané otázky — progress už je OK

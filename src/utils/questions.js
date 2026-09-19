@@ -3,6 +3,16 @@ import { PREDPONY } from '../data/predpony'
 import { ROUND_SIZE } from '../data/constants'
 import { getBankQuestions, bankCategories } from '../data/questionBank'
 
+/** Stabilní ID otázky pro st_answers / st_error_log. */
+export function getQuestionId(question) {
+  if (!question) return null
+  if (question.id) return String(question.id)
+  if (question.category && question.display != null) {
+    return `${question.category}:${question.display}`
+  }
+  return null
+}
+
 export function shuffle(a) {
   const b = [...a]
   for (let i = b.length - 1; i > 0; i--) {
@@ -84,6 +94,7 @@ function generateOne(cat, difficulty, ctx) {
     const options = ['y / ý', 'i / í']
     const correctIdx = isY ? 0 : 1
     return {
+      id: `vyjna:${item.word}`,
       type: 'vyber',
       category: 'vyjna',
       subject: 'cestina',
@@ -106,6 +117,7 @@ function generateOne(cat, difficulty, ctx) {
     const shuffledOpts = shuffle([...item.opts])
     const correctIdx = shuffledOpts.indexOf(item.correct)
     return {
+      id: `predpony:${item.word}`,
       type: 'vyber',
       category: 'predpony',
       subject: 'cestina',
@@ -141,6 +153,7 @@ function generateOne(cat, difficulty, ctx) {
     const correctIdx = opts.indexOf(answer)
     const display = `${a} × ${b}`
     return {
+      id: `nasobilka:${a}x${b}`,
       type: 'vyber',
       category: 'nasobilka',
       subject: 'matematika',
@@ -181,6 +194,7 @@ function generateOne(cat, difficulty, ctx) {
     const options = opts.map(String)
     const correctIdx = opts.indexOf(m.answer)
     return {
+      id: `pocitani:${m.q}`,
       type: 'vyber',
       category: 'pocitani',
       subject: 'matematika',

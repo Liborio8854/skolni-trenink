@@ -18,3 +18,8 @@ export function getBankQuestions(category) {
 export function bankCategories() {
   return [...new Set(QUESTION_BANK.map(q => q.category))]
 }
+
+export function findQuestionById(id) {
+  if (!id) return null
+  return QUESTION_BANK.find(q => q.id === id) || null
+}
