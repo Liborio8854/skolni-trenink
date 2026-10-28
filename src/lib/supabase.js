@@ -17,4 +17,5 @@ export const TABLES = {
   userProgress: 'st_user_progress',
   errorLog: 'st_error_log',
   nasobilkaMastery: 'st_nasobilka_mastery',
+  nasobilkaDenni: 'st_nasobilka_denni',
 }

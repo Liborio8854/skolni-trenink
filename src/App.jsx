@@ -80,6 +80,13 @@ export default function App() {
     masteryRef.current = mastery;
   }, [mastery]);
 
+  // Hub Mistr násobilky: obnov dnešní úspěšná kola ze Supabase
+  useEffect(() => {
+    if (screen === "mastery") {
+      masteryRef.current.refreshDaily?.();
+    }
+  }, [screen]);
+
   // Shortcuts to persisted values
   const stars = progress.stars;
   const coins = progress.coins;

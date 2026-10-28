@@ -5,6 +5,7 @@ import {
   mergeMasteryEntries,
   MASTERY_STATES,
 } from './nasobilkaMastery.js'
+import { localDateKey } from '../utils/date.js'
 
 const fails = []
 function assert(cond, msg) {
@@ -62,6 +63,19 @@ function assert(cond, msg) {
   }]
   const merged = mergeMasteryEntries(local, remote)
   assert(merged['6×7'].stav === MASTERY_STATES.ZAFIXOVANO, `expected zafixovano, got ${merged['6×7'].stav}`)
+}
+
+// Europe/Prague: po půlnoci v Praze je UTC ještě předchozí den
+{
+  // 2026-10-28 00:30 CET = 2026-10-27 23:30 UTC
+  const pragueMorning = new Date('2026-10-27T23:30:00.000Z')
+  assert(localDateKey(pragueMorning) === '2026-10-28', `Prague morning expected 2026-10-28, got ${localDateKey(pragueMorning)}`)
+  assert(pragueMorning.toISOString().slice(0, 10) === '2026-10-27', 'UTC slice is previous day (bug we avoid)')
+
+  // 2026-07-15 00:30 CEST = 2026-07-14 22:30 UTC
+  const summerMorning = new Date('2026-07-14T22:30:00.000Z')
+  assert(localDateKey(summerMorning) === '2026-07-15', `Summer morning expected 2026-07-15, got ${localDateKey(summerMorning)}`)
+  assert(summerMorning.toISOString().slice(0, 10) === '2026-07-14', 'UTC slice wrong in summer too')
 }
 
 if (fails.length) {

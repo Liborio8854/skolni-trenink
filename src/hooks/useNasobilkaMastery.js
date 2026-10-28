@@ -8,13 +8,15 @@ import {
   progressPct,
   MASTERY_CONFIG,
 } from '../data/nasobilkaMastery'
-import { fetchNasobilkaMastery, upsertNasobilkaMasteryEntry } from '../lib/sync'
+import { localDateKey } from '../utils/date'
+import {
+  fetchNasobilkaMastery,
+  upsertNasobilkaMasteryEntry,
+  fetchNasobilkaDenni,
+  incrementNasobilkaKola,
+} from '../lib/sync'
 
 const LOCAL_KEY = 'skolni-trenink-nasobilka-mastery'
-
-function todayKey() {
-  return new Date().toISOString().slice(0, 10)
-}
 
 function loadLocal(userId) {
   try {
@@ -40,6 +42,13 @@ function saveLocal(userId, entries, daily) {
   } catch { /* ignore */ }
 }
 
+function localDailyForToday(userId) {
+  const local = loadLocal(userId)
+  const today = localDateKey()
+  if (local?.dailyDate === today) return local.dailySuccessful || 0
+  return 0
+}
+
 export function useNasobilkaMastery(userId) {
   const userIdRef = useRef(userId)
   const [entries, setEntries] = useState(() => {
@@ -47,11 +56,7 @@ export function useNasobilkaMastery(userId) {
     return ensureEntries(local?.entries || {})
   })
   const entriesRef = useRef(entries)
-  const [dailySuccessful, setDailySuccessful] = useState(() => {
-    const local = loadLocal(userId)
-    if (local?.dailyDate === todayKey()) return local.dailySuccessful || 0
-    return 0
-  })
+  const [dailySuccessful, setDailySuccessful] = useState(() => localDailyForToday(userId))
   const [celebrationSeen, setCelebrationSeen] = useState(() => {
     const local = loadLocal(userId)
     return !!local?.celebrationSeen
@@ -69,10 +74,32 @@ export function useNasobilkaMastery(userId) {
   useEffect(() => {
     saveLocal(userId, entries, {
       count: dailySuccessful,
-      date: todayKey(),
+      date: localDateKey(),
       celebrationSeen,
     })
   }, [entries, dailySuccessful, celebrationSeen, userId])
+
+  const syncDailyFromRemote = useCallback(async () => {
+    const uid = userIdRef.current
+    if (!uid) return
+    const today = localDateKey()
+    const remote = await fetchNasobilkaDenni(uid, today)
+    if (remote == null) return // offline / chyba — nech lokální zálohu
+
+    const localCount = localDailyForToday(uid)
+    if (localCount > remote) {
+      // Doženeme offline přírůstky atomickými +1
+      let current = remote
+      for (let i = 0; i < localCount - remote; i++) {
+        const next = await incrementNasobilkaKola(today)
+        if (next == null) break
+        current = next
+      }
+      setDailySuccessful(Math.max(current, localCount))
+    } else {
+      setDailySuccessful(remote)
+    }
+  }, [])
 
   useEffect(() => {
     if (!userId) {
@@ -88,20 +115,14 @@ export function useNasobilkaMastery(userId) {
         entriesRef.current = merged
         return merged
       })
-      setLoaded(true)
+      await syncDailyFromRemote()
+      if (!cancelled) setLoaded(true)
     })().catch(err => {
       console.warn('Načtení mastery selhalo:', err)
       if (!cancelled) setLoaded(true)
     })
     return () => { cancelled = true }
-  }, [userId])
-
-  useEffect(() => {
-    const local = loadLocal(userId)
-    if (local?.dailyDate && local.dailyDate !== todayKey()) {
-      setDailySuccessful(0)
-    }
-  }, [userId])
+  }, [userId, syncDailyFromRemote])
 
   const recordMasteryAnswer = useCallback((question, { correct, ms }) => {
     if (!question?.masteryKey) return { newlyFixed: false, entry: null }
@@ -123,8 +144,14 @@ export function useNasobilkaMastery(userId) {
     return { newlyFixed, entry }
   }, [])
 
-  const recordSuccessfulRound = useCallback(() => {
-    setDailySuccessful(n => n + 1)
+  const recordSuccessfulRound = useCallback(async () => {
+    const today = localDateKey()
+    setDailySuccessful(n => n + 1) // optimisticky + lokální záloha
+
+    const remoteCount = await incrementNasobilkaKola(today)
+    if (remoteCount != null) {
+      setDailySuccessful(remoteCount)
+    }
   }, [])
 
   const markCelebrationSeen = useCallback(() => {
@@ -148,5 +175,6 @@ export function useNasobilkaMastery(userId) {
     recordMasteryAnswer,
     recordSuccessfulRound,
     markCelebrationSeen,
+    refreshDaily: syncDailyFromRemote,
   }
 }

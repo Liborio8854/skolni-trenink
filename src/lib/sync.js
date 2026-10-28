@@ -203,3 +203,45 @@ export async function upsertNasobilkaMasteryEntry(userId, entry) {
     console.warn('Uložení st_nasobilka_mastery selhalo:', err)
   }
 }
+
+/** Dnešní úspěšná kola (null = chyba sítě / tabulka neexistuje). */
+export async function fetchNasobilkaDenni(userId, datum) {
+  if (!userId || !datum) return null
+  try {
+    const { data, error } = await supabase
+      .from(TABLES.nasobilkaDenni)
+      .select('uspesna_kola')
+      .eq('user_id', userId)
+      .eq('datum', datum)
+      .maybeSingle()
+    if (error) {
+      console.warn('Načtení st_nasobilka_denni selhalo:', error.message)
+      return null
+    }
+    return data?.uspesna_kola ?? 0
+  } catch (err) {
+    console.warn('Načtení st_nasobilka_denni selhalo:', err)
+    return null
+  }
+}
+
+/**
+ * Atomické +1 přes RPC. Vrací nový počet, nebo null při chybě.
+ * @param {string} datum YYYY-MM-DD (Europe/Prague)
+ */
+export async function incrementNasobilkaKola(datum) {
+  if (!datum) return null
+  try {
+    const { data, error } = await supabase.rpc('increment_nasobilka_kola', {
+      p_datum: datum,
+    })
+    if (error) {
+      console.warn('RPC increment_nasobilka_kola selhalo:', error.message)
+      return null
+    }
+    return typeof data === 'number' ? data : Number(data) || null
+  } catch (err) {
+    console.warn('RPC increment_nasobilka_kola selhalo:', err)
+    return null
+  }
+}

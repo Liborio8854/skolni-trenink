@@ -1,3 +1,5 @@
+import { localDateKey } from '../utils/date.js'
+
 /** Konfigurace režimu Mistr násobilky — text odměny lze později změnit. */
 export const MASTERY_CONFIG = {
   rewardLabel: '🎁 Odměna: příspěvek na klávesnici',
@@ -171,7 +173,7 @@ export function applyMasteryAnswer(entry, answer) {
   let blesk_ab = !!prev.blesk_ab || orderAb || isSquare
   let blesk_ba = !!prev.blesk_ba || orderBa || isSquare
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDateKey()
   const days = new Set(Array.isArray(prev.blesk_dny) ? prev.blesk_dny : [])
   days.add(today)
   const blesk_dny = [...days].sort()
