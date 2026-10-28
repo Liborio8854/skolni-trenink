@@ -11,6 +11,8 @@ import {
   generateMasteryRound,
   applyMasteryAnswer,
   emptyEntry,
+  countGoalDays,
+  getRewardProgress,
 } from './nasobilkaMastery.js'
 import { localDateKey } from '../utils/date.js'
 
@@ -89,6 +91,45 @@ function assert(cond, msg) {
 assert(MASTERY_CONFIG.timeLimit === 6, `timeLimit expected 6, got ${MASTERY_CONFIG.timeLimit}`)
 assert(MASTERY_CONFIG.flashMs === 3000, 'flash stays 3 s')
 assert(MASTERY_CONFIG.fixMinDays === 3, `fixMinDays expected 3, got ${MASTERY_CONFIG.fixMinDays}`)
+assert(MASTERY_CONFIG.requiredGoalDays === 15, `requiredGoalDays expected 15, got ${MASTERY_CONFIG.requiredGoalDays}`)
+
+// Počet dní se splněným cílem (uspesna_kola >= 2)
+{
+  const rows = [
+    { datum: '2026-10-01', uspesna_kola: 2 },
+    { datum: '2026-10-02', uspesna_kola: 1 },
+    { datum: '2026-10-03', uspesna_kola: 3 },
+    { datum: '2026-10-04', uspesna_kola: 0 },
+    { datum: '2026-10-05', uspesna_kola: 2 },
+  ]
+  assert(countGoalDays(rows) === 3, `countGoalDays expected 3, got ${countGoalDays(rows)}`)
+  assert(countGoalDays([]) === 0, 'empty rows → 0')
+  assert(countGoalDays(null) === 0, 'null → 0')
+}
+
+// Odměna: tři kombinace podmínek
+{
+  // Tabulka hotová, dny chybí
+  const tableOnly = getRewardProgress({ fixed: 36, goalDays: 10 })
+  assert(tableOnly.allFixed && !tableOnly.daysMet, 'table only: fixed yes, days no')
+  assert(!tableOnly.rewardUnlocked, 'table only: reward locked')
+  assert(tableOnly.celebrationKind === 'table', 'table only: table celebration')
+  assert(tableOnly.daysRemaining === 5, `table only: remaining 5, got ${tableOnly.daysRemaining}`)
+  assert(tableOnly.celebrationMessage.includes('5 dní'), 'table only: message mentions remaining days')
+
+  // Dny splněné, tabulka ne — žádná oslava
+  const daysOnly = getRewardProgress({ fixed: 20, goalDays: 15 })
+  assert(!daysOnly.allFixed && daysOnly.daysMet, 'days only: days yes, fixed no')
+  assert(!daysOnly.rewardUnlocked, 'days only: reward locked')
+  assert(daysOnly.celebrationKind === null, 'days only: no celebration')
+  assert(daysOnly.celebrationMessage === null, 'days only: no message')
+
+  // Obojí splněno
+  const both = getRewardProgress({ fixed: 36, goalDays: 15 })
+  assert(both.rewardUnlocked, 'both: reward unlocked')
+  assert(both.celebrationKind === 'reward', 'both: reward celebration')
+  assert(both.celebrationMessage === MASTERY_CONFIG.completeMessage, 'both: reward message')
+}
 
 // Zafixování: 3 blesky v řadě + 3 různé dny + obě pořadí
 {

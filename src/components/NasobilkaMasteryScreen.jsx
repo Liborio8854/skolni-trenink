@@ -18,13 +18,21 @@ export default function NasobilkaMasteryScreen({
   pct,
   dailySuccessful,
   dailyGoal,
+  goalDays,
+  requiredGoalDays,
   allFixed,
+  daysMet,
+  rewardUnlocked,
   showBigCelebration,
+  celebrationKind,
+  celebrationMessage,
   fixToast,
   onStartRound,
   onBack,
   onDismissCelebration,
 }) {
+  const goalDaysPct = Math.min(100, Math.round((goalDays / requiredGoalDays) * 100))
+
   return (
     <div>
       {showBigCelebration && (
@@ -37,18 +45,24 @@ export default function NasobilkaMasteryScreen({
           animation: 'fadeIn .4s ease',
         }}>
           <ConfettiBurst />
-          <div style={{ fontSize: 64, marginBottom: 12 }}>🏆</div>
+          <div style={{ fontSize: 64, marginBottom: 12 }}>
+            {celebrationKind === 'reward' ? '🎁' : '🏆'}
+          </div>
           <div style={{
             fontSize: 28, fontWeight: 900, marginBottom: 8,
             background: 'linear-gradient(135deg,#FFD166,#FF6B35 50%,#EF476F)',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-          }}>Odznak: {MASTERY_CONFIG.badgeName}</div>
+          }}>
+            {celebrationKind === 'reward'
+              ? `Odznak: ${MASTERY_CONFIG.badgeName}`
+              : `Odznak: ${MASTERY_CONFIG.badgeName}`}
+          </div>
           <div style={{
             fontSize: 16, fontWeight: 700, color: '#E8ECF4',
             maxWidth: 340, lineHeight: 1.5, marginBottom: 24,
-          }}>{MASTERY_CONFIG.completeMessage}</div>
+          }}>{celebrationMessage}</div>
           <button
-            onClick={onDismissCelebration}
+            onClick={() => onDismissCelebration(celebrationKind)}
             style={{
               ...glassStrong,
               padding: '14px 28px', borderRadius: 16,
@@ -196,15 +210,19 @@ export default function NasobilkaMasteryScreen({
           }} />
         </div>
         <div style={{
-          marginTop: 10, fontSize: 13, fontWeight: 700, color: '#8892A8',
+          marginTop: 12, fontSize: 13, fontWeight: 800, color: rewardUnlocked ? '#FFD166' : '#8892A8',
         }}>
           {MASTERY_CONFIG.rewardLabel}
+        </div>
+        <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700, color: '#E8ECF4', lineHeight: 1.6 }}>
+          <div>{allFixed ? '✓' : '○'} {fixed}/{MASTERY_CONFIG.totalExamples} zafixováno</div>
+          <div>{daysMet ? '✓' : '○'} {goalDays}/{requiredGoalDays} dní se splněným cílem</div>
         </div>
       </div>
 
       <div style={{
         ...glass,
-        borderRadius: 16, padding: '12px 18px', marginBottom: 20,
+        borderRadius: 16, padding: '12px 18px', marginBottom: 12,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: '#8892A8' }}>Dnes úspěšná kola</span>
@@ -213,12 +231,35 @@ export default function NasobilkaMasteryScreen({
         </span>
       </div>
 
+      <div style={{
+        ...glass,
+        borderRadius: 16, padding: '12px 18px', marginBottom: 20,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700 }}>
+          <span style={{ color: '#8892A8' }}>📅 Dny se splněným cílem: {goalDays} / {requiredGoalDays}</span>
+          <span style={{ color: '#FFD166' }}>{goalDaysPct}%</span>
+        </div>
+        <div style={{
+          height: 8, borderRadius: 4, background: 'rgba(255,255,255,.08)',
+          marginTop: 8, overflow: 'hidden',
+        }}>
+          <div style={{
+            height: '100%', borderRadius: 4,
+            width: `${goalDaysPct}%`,
+            background: 'linear-gradient(90deg,#3B82F6,#60A5FA)',
+            transition: 'width .5s ease',
+          }} />
+        </div>
+      </div>
+
       {allFixed && (
         <div style={{
           textAlign: 'center', marginBottom: 16, fontSize: 14, fontWeight: 800,
-          color: '#FFD166', animation: 'pulse 2s ease infinite',
+          color: '#FFD166', animation: rewardUnlocked ? 'pulse 2s ease infinite' : 'none',
         }}>
-          🏅 Máš odznak {MASTERY_CONFIG.badgeName}!
+          {rewardUnlocked
+            ? `🏅 Máš odznak ${MASTERY_CONFIG.badgeName} — odměna odemčená!`
+            : `🏅 Máš odznak ${MASTERY_CONFIG.badgeName}!`}
         </div>
       )}
 

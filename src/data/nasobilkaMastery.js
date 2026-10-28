@@ -7,6 +7,8 @@ export const MASTERY_CONFIG = {
   badgeName: 'Mistr násobilky',
   coinsPerFix: 50,
   dailyGoalRounds: 2,
+  /** Kolik dní se splněným denním cílem odemyká odměnu (spolu s 36 zafixovanými). */
+  requiredGoalDays: 15,
   roundSize: 10,
   successPct: 90,
   timeLimit: 6,
@@ -14,6 +16,47 @@ export const MASTERY_CONFIG = {
   /** Min. počet různých dní s bleskem pro zafixování. */
   fixMinDays: 3,
   totalExamples: 36,
+}
+
+/**
+ * Počet dní, kdy uspesna_kola >= denní cíl.
+ * @param {{ uspesna_kola?: number }[]} rows
+ * @param {number} [dailyGoal]
+ */
+export function countGoalDays(rows, dailyGoal = MASTERY_CONFIG.dailyGoalRounds) {
+  if (!Array.isArray(rows)) return 0
+  return rows.filter(r => (r?.uspesna_kola || 0) >= dailyGoal).length
+}
+
+/**
+ * Stav odměny / oslav podle tabulky a pravidelnosti.
+ * @param {{ fixed: number, goalDays: number }}
+ */
+export function getRewardProgress({ fixed, goalDays }) {
+  const allFixed = (fixed || 0) >= MASTERY_CONFIG.totalExamples
+  const daysMet = (goalDays || 0) >= MASTERY_CONFIG.requiredGoalDays
+  const daysRemaining = Math.max(0, MASTERY_CONFIG.requiredGoalDays - (goalDays || 0))
+  const rewardUnlocked = allFixed && daysMet
+
+  let celebrationKind = null
+  if (allFixed && daysMet) celebrationKind = 'reward'
+  else if (allFixed) celebrationKind = 'table'
+
+  let celebrationMessage = null
+  if (celebrationKind === 'reward') {
+    celebrationMessage = MASTERY_CONFIG.completeMessage
+  } else if (celebrationKind === 'table') {
+    celebrationMessage = `Tabulka je zlatá! Do odměny zbývá ještě ${daysRemaining} dní se splněným cílem.`
+  }
+
+  return {
+    allFixed,
+    daysMet,
+    rewardUnlocked,
+    daysRemaining,
+    celebrationKind,
+    celebrationMessage,
+  }
 }
 
 export const MASTERY_STATES = {

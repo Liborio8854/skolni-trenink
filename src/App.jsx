@@ -718,12 +718,18 @@ export default function App() {
             pct={mastery.pct}
             dailySuccessful={mastery.dailySuccessful}
             dailyGoal={mastery.dailyGoal}
+            goalDays={mastery.goalDays}
+            requiredGoalDays={mastery.requiredGoalDays}
             allFixed={mastery.allFixed}
+            daysMet={mastery.daysMet}
+            rewardUnlocked={mastery.rewardUnlocked}
             showBigCelebration={mastery.showBigCelebration}
+            celebrationKind={mastery.celebrationKind}
+            celebrationMessage={mastery.celebrationMessage}
             fixToast={fixToast}
             onStartRound={startMasteryRound}
             onBack={() => setScreen("dashboard")}
-            onDismissCelebration={() => mastery.markCelebrationSeen()}
+            onDismissCelebration={(kind) => mastery.markCelebrationSeen(kind)}
           />
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   ensureEntries,
   emptyEntry,
@@ -6,6 +6,8 @@ import {
   mergeMasteryEntries,
   fixedCount,
   progressPct,
+  countGoalDays,
+  getRewardProgress,
   MASTERY_CONFIG,
 } from '../data/nasobilkaMastery'
 import { localDateKey } from '../utils/date'
@@ -13,6 +15,7 @@ import {
   fetchNasobilkaMastery,
   upsertNasobilkaMasteryEntry,
   fetchNasobilkaDenni,
+  fetchNasobilkaDenniAll,
   incrementNasobilkaKola,
 } from '../lib/sync'
 
@@ -37,7 +40,11 @@ function saveLocal(userId, entries, daily) {
       entries,
       dailySuccessful: daily.count,
       dailyDate: daily.date,
-      celebrationSeen: daily.celebrationSeen || false,
+      goalDays: daily.goalDays ?? 0,
+      tableCelebrationSeen: !!daily.tableCelebrationSeen,
+      rewardCelebrationSeen: !!daily.rewardCelebrationSeen,
+      // legacy
+      celebrationSeen: !!daily.rewardCelebrationSeen || !!daily.tableCelebrationSeen,
     }))
   } catch { /* ignore */ }
 }
@@ -57,9 +64,17 @@ export function useNasobilkaMastery(userId) {
   })
   const entriesRef = useRef(entries)
   const [dailySuccessful, setDailySuccessful] = useState(() => localDailyForToday(userId))
-  const [celebrationSeen, setCelebrationSeen] = useState(() => {
+  const [goalDays, setGoalDays] = useState(() => {
     const local = loadLocal(userId)
-    return !!local?.celebrationSeen
+    return local?.goalDays || 0
+  })
+  const [tableCelebrationSeen, setTableCelebrationSeen] = useState(() => {
+    const local = loadLocal(userId)
+    return !!(local?.tableCelebrationSeen || local?.celebrationSeen)
+  })
+  const [rewardCelebrationSeen, setRewardCelebrationSeen] = useState(() => {
+    const local = loadLocal(userId)
+    return !!local?.rewardCelebrationSeen
   })
   const [loaded, setLoaded] = useState(false)
 
@@ -75,20 +90,42 @@ export function useNasobilkaMastery(userId) {
     saveLocal(userId, entries, {
       count: dailySuccessful,
       date: localDateKey(),
-      celebrationSeen,
+      goalDays,
+      tableCelebrationSeen,
+      rewardCelebrationSeen,
     })
-  }, [entries, dailySuccessful, celebrationSeen, userId])
+  }, [entries, dailySuccessful, goalDays, tableCelebrationSeen, rewardCelebrationSeen, userId])
+
+  const syncGoalDaysFromRemote = useCallback(async () => {
+    const uid = userIdRef.current
+    if (!uid) return
+    const rows = await fetchNasobilkaDenniAll(uid)
+    if (rows == null) return // offline — nech lokální zálohu
+
+    const today = localDateKey()
+    const localToday = localDailyForToday(uid)
+    const merged = rows.map(r => ({ ...r }))
+    const todayRow = merged.find(r => r.datum === today)
+    if (localToday > 0) {
+      if (todayRow) {
+        todayRow.uspesna_kola = Math.max(todayRow.uspesna_kola || 0, localToday)
+      } else {
+        merged.push({ datum: today, uspesna_kola: localToday })
+      }
+    }
+
+    setGoalDays(countGoalDays(merged))
+  }, [])
 
   const syncDailyFromRemote = useCallback(async () => {
     const uid = userIdRef.current
     if (!uid) return
     const today = localDateKey()
     const remote = await fetchNasobilkaDenni(uid, today)
-    if (remote == null) return // offline / chyba — nech lokální zálohu
+    if (remote == null) return
 
     const localCount = localDailyForToday(uid)
     if (localCount > remote) {
-      // Doženeme offline přírůstky atomickými +1
       let current = remote
       for (let i = 0; i < localCount - remote; i++) {
         const next = await incrementNasobilkaKola(today)
@@ -99,7 +136,8 @@ export function useNasobilkaMastery(userId) {
     } else {
       setDailySuccessful(remote)
     }
-  }, [])
+    await syncGoalDaysFromRemote()
+  }, [syncGoalDaysFromRemote])
 
   useEffect(() => {
     if (!userId) {
@@ -146,31 +184,63 @@ export function useNasobilkaMastery(userId) {
 
   const recordSuccessfulRound = useCallback(async () => {
     const today = localDateKey()
-    setDailySuccessful(n => n + 1) // optimisticky + lokální záloha
+    const goal = MASTERY_CONFIG.dailyGoalRounds
+    let prevCount = 0
+    setDailySuccessful(n => {
+      prevCount = n
+      return n + 1
+    })
 
     const remoteCount = await incrementNasobilkaKola(today)
-    if (remoteCount != null) {
-      setDailySuccessful(remoteCount)
-    }
-  }, [])
+    const finalCount = remoteCount != null ? remoteCount : prevCount + 1
+    if (remoteCount != null) setDailySuccessful(remoteCount)
 
-  const markCelebrationSeen = useCallback(() => {
-    setCelebrationSeen(true)
+    if (prevCount < goal && finalCount >= goal) {
+      const rows = await fetchNasobilkaDenniAll(userIdRef.current)
+      if (rows == null) {
+        setGoalDays(g => g + 1)
+      } else {
+        await syncGoalDaysFromRemote()
+      }
+    }
+  }, [syncGoalDaysFromRemote])
+
+  const markCelebrationSeen = useCallback((kind) => {
+    if (kind === 'reward') setRewardCelebrationSeen(true)
+    else if (kind === 'table') setTableCelebrationSeen(true)
+    else {
+      setTableCelebrationSeen(true)
+      setRewardCelebrationSeen(true)
+    }
   }, [])
 
   const fixed = fixedCount(entries)
   const pct = progressPct(entries)
-  const allFixed = fixed >= MASTERY_CONFIG.totalExamples
-  const showBigCelebration = allFixed && !celebrationSeen
+  const reward = useMemo(
+    () => getRewardProgress({ fixed, goalDays }),
+    [fixed, goalDays],
+  )
+
+  const showBigCelebration = (
+    (reward.celebrationKind === 'reward' && !rewardCelebrationSeen)
+    || (reward.celebrationKind === 'table' && !tableCelebrationSeen && !reward.rewardUnlocked)
+  )
 
   return {
     entries,
     loaded,
     dailySuccessful,
     dailyGoal: MASTERY_CONFIG.dailyGoalRounds,
+    goalDays,
+    requiredGoalDays: MASTERY_CONFIG.requiredGoalDays,
     fixed,
     pct,
-    allFixed,
+    allFixed: reward.allFixed,
+    daysMet: reward.daysMet,
+    rewardUnlocked: reward.rewardUnlocked,
+    daysRemaining: reward.daysRemaining,
+    celebrationKind: showBigCelebration ? reward.celebrationKind : null,
+    celebrationMessage: showBigCelebration ? reward.celebrationMessage : null,
     showBigCelebration,
     recordMasteryAnswer,
     recordSuccessfulRound,

@@ -225,6 +225,25 @@ export async function fetchNasobilkaDenni(userId, datum) {
   }
 }
 
+/** Všechny denní záznamy uživatele (null = chyba). */
+export async function fetchNasobilkaDenniAll(userId) {
+  if (!userId) return null
+  try {
+    const { data, error } = await supabase
+      .from(TABLES.nasobilkaDenni)
+      .select('datum, uspesna_kola')
+      .eq('user_id', userId)
+    if (error) {
+      console.warn('Načtení st_nasobilka_denni (all) selhalo:', error.message)
+      return null
+    }
+    return data || []
+  } catch (err) {
+    console.warn('Načtení st_nasobilka_denni (all) selhalo:', err)
+    return null
+  }
+}
+
 /**
  * Atomické +1 přes RPC. Vrací nový počet, nebo null při chybě.
  * @param {string} datum YYYY-MM-DD (Europe/Prague)
