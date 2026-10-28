@@ -11,6 +11,8 @@ export const MASTERY_CONFIG = {
   successPct: 90,
   timeLimit: 6,
   flashMs: 3000,
+  /** Min. počet různých dní s bleskem pro zafixování. */
+  fixMinDays: 3,
   totalExamples: 36,
 }
 
@@ -183,7 +185,12 @@ export function applyMasteryAnswer(entry, answer) {
   const serie = (prev.serie || 0) + 1
 
   let stav = MASTERY_STATES.UMIM
-  if (serie >= 3 && blesk_dny.length >= 2 && blesk_ab && blesk_ba) {
+  if (
+    serie >= 3
+    && blesk_dny.length >= MASTERY_CONFIG.fixMinDays
+    && blesk_ab
+    && blesk_ba
+  ) {
     stav = MASTERY_STATES.ZAFIXOVANO
   }
 

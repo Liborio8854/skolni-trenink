@@ -9,6 +9,8 @@ import {
   allMultiplicationProducts,
   allMasteryPairs,
   generateMasteryRound,
+  applyMasteryAnswer,
+  emptyEntry,
 } from './nasobilkaMastery.js'
 import { localDateKey } from '../utils/date.js'
 
@@ -86,6 +88,52 @@ function assert(cond, msg) {
 // Časový limit mastery kola
 assert(MASTERY_CONFIG.timeLimit === 6, `timeLimit expected 6, got ${MASTERY_CONFIG.timeLimit}`)
 assert(MASTERY_CONFIG.flashMs === 3000, 'flash stays 3 s')
+assert(MASTERY_CONFIG.fixMinDays === 3, `fixMinDays expected 3, got ${MASTERY_CONFIG.fixMinDays}`)
+
+// Zafixování: 3 blesky v řadě + 3 různé dny + obě pořadí
+{
+  const today = localDateKey()
+  const dayBefore = (() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 1)
+    return localDateKey(d)
+  })()
+  const twoBefore = (() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 2)
+    return localDateKey(d)
+  })()
+
+  // Jen 2 dny → zůstane umim i při sérii 3 a obou pořadích
+  let e = {
+    ...emptyEntry('7×8'),
+    stav: MASTERY_STATES.UMIM,
+    serie: 2,
+    blesk_dny: [dayBefore],
+    blesk_ab: true,
+    blesk_ba: true,
+  }
+  let r = applyMasteryAnswer(e, { correct: true, ms: 1000, shownA: 7, shownB: 8 })
+  assert(r.entry.serie === 3, 'serie 3')
+  assert(r.entry.blesk_dny.length === 2, `expected 2 days, got ${r.entry.blesk_dny.length}`)
+  assert(r.entry.stav === MASTERY_STATES.UMIM, '2 days must not fix')
+  assert(r.newlyFixed === false, 'newlyFixed false with 2 days')
+
+  // 3 dny → zafixováno
+  e = {
+    ...emptyEntry('7×8'),
+    stav: MASTERY_STATES.UMIM,
+    serie: 2,
+    blesk_dny: [twoBefore, dayBefore],
+    blesk_ab: true,
+    blesk_ba: true,
+  }
+  r = applyMasteryAnswer(e, { correct: true, ms: 1000, shownA: 8, shownB: 7 })
+  assert(r.entry.blesk_dny.includes(today), 'today recorded')
+  assert(r.entry.blesk_dny.length >= 3, `expected ≥3 days, got ${r.entry.blesk_dny.length}`)
+  assert(r.entry.stav === MASTERY_STATES.ZAFIXOVANO, '3 days should fix')
+  assert(r.newlyFixed === true, 'newlyFixed true')
+}
 
 // Distraktory jsou vždy výsledky násobilky (tabulka 2–9)
 {
