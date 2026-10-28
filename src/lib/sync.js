@@ -154,3 +154,52 @@ export async function upsertErrorLogEntry(userId, entry) {
     console.warn('Uložení st_error_log selhalo:', err)
   }
 }
+
+function rowToMasteryEntry(row) {
+  return {
+    priklad: row.priklad,
+    stav: row.stav || 'neznamo',
+    serie: row.serie || 0,
+    blesk_dny: Array.isArray(row.blesk_dny) ? row.blesk_dny : [],
+    blesk_ab: !!row.blesk_ab,
+    blesk_ba: !!row.blesk_ba,
+    aktualizovano: row.aktualizovano || null,
+  }
+}
+
+export async function fetchNasobilkaMastery(userId) {
+  if (!userId) return []
+  const { data, error } = await supabase
+    .from(TABLES.nasobilkaMastery)
+    .select('*')
+    .eq('user_id', userId)
+  if (error) {
+    console.warn('Načtení st_nasobilka_mastery selhalo:', error.message)
+    return []
+  }
+  return (data || []).map(rowToMasteryEntry)
+}
+
+export async function upsertNasobilkaMasteryEntry(userId, entry) {
+  if (!userId || !entry?.priklad) return
+  try {
+    const { error } = await supabase.from(TABLES.nasobilkaMastery).upsert(
+      {
+        user_id: userId,
+        priklad: entry.priklad,
+        stav: entry.stav,
+        serie: entry.serie || 0,
+        blesk_dny: entry.blesk_dny || [],
+        blesk_ab: !!entry.blesk_ab,
+        blesk_ba: !!entry.blesk_ba,
+        aktualizovano: entry.aktualizovano || new Date().toISOString(),
+      },
+      { onConflict: 'user_id,priklad' },
+    )
+    if (error) {
+      console.warn('Uložení st_nasobilka_mastery selhalo:', error.message)
+    }
+  } catch (err) {
+    console.warn('Uložení st_nasobilka_mastery selhalo:', err)
+  }
+}

@@ -16,4 +16,5 @@ export const TABLES = {
   answers: 'st_answers',
   userProgress: 'st_user_progress',
   errorLog: 'st_error_log',
+  nasobilkaMastery: 'st_nasobilka_mastery',
 }

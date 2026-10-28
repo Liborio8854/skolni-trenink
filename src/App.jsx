@@ -2,9 +2,11 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { CATS, MOTIVACE, SPATNE, ROUND_SIZE } from "./data/constants";
 import { getCategory } from "./data/categories";
 import { generateQuestions, shuffledVyberOptions, vyberCorrectOptionId } from "./utils/questions";
+import { generateMasteryRound, isRoundSuccessful, MASTERY_CONFIG } from "./data/nasobilkaMastery";
 import { evaluateAnswer } from "./utils/evaluate";
 import { glass, glassStrong, glassBadge, bgStyle, wrapStyle, BgBlobs } from "./utils/styles";
 import { useProgress } from "./hooks/useProgress";
+import { useNasobilkaMastery } from "./hooks/useNasobilkaMastery";
 import { useAuth } from "./hooks/useAuth";
 import { initAudio, playCorrect, playWrong, playTimeout, playResultGreat, playResultOk, playResultBad } from "./utils/sounds";
 import TimerRing from "./components/TimerRing";
@@ -14,6 +16,7 @@ import AnSvazekQuestion from "./components/AnSvazekQuestion";
 import OtevrenaQuestion from "./components/OtevrenaQuestion";
 import OtevrenaMultiQuestion from "./components/OtevrenaMultiQuestion";
 import PrirazovaniQuestion from "./components/PrirazovaniQuestion";
+import NasobilkaMasteryScreen from "./components/NasobilkaMasteryScreen";
 
 /* ════════════════════════════════════════════════════════════════════════════
    ŠKOLNÍ TRÉNINK — v1
@@ -39,9 +42,11 @@ function ShuffledVyberButtons({ question, answered, onPick, btnStyle, optionStat
 
 export default function App() {
   const { session, user, loading: authLoading, authError, signIn, signUp, signOut } = useAuth();
-  const { progress, addCorrect, addWrong, finishRound, addError, recordAnswer, setActiveCats: persistActiveCats, spendCoins, startSession, endSession, discardSession, getTodayTime, getWeekTime, formatTime } = useProgress(user?.id);
+  const { progress, addCorrect, addWrong, finishRound, addError, recordAnswer, setActiveCats: persistActiveCats, spendCoins, addCoins, startSession, endSession, discardSession, getTodayTime, getWeekTime, formatTime } = useProgress(user?.id);
+  const mastery = useNasobilkaMastery(user?.id);
   const [soundOn, setSoundOn] = useState(true);
   const [screen, setScreen] = useState("dashboard");
+  const [roundMode, setRoundMode] = useState("normal"); // normal | mastery
   const activeCats = progress.activeCats?.length ? progress.activeCats : CATS.map(c => c.id);
   const [questions, setQuestions] = useState([]);
   const [qIdx, setQIdx] = useState(0);
@@ -59,6 +64,7 @@ export default function App() {
   const [answerMs, setAnswerMs] = useState(null);
   const [lastEval, setLastEval] = useState(null);
   const [catHint, setCatHint] = useState(null);
+  const [fixToast, setFixToast] = useState(null);
   const startRef = useRef(null);
   const catHintRef = useRef(null);
   const timerRef = useRef(null);
@@ -67,6 +73,12 @@ export default function App() {
   const qRef = useRef(0);
   const roundSizeRef = useRef(ROUND_SIZE);
   const roundCounted = useRef(false);
+  const roundModeRef = useRef("normal");
+  const masteryRef = useRef(mastery);
+
+  useEffect(() => {
+    masteryRef.current = mastery;
+  }, [mastery]);
 
   // Shortcuts to persisted values
   const stars = progress.stars;
@@ -113,6 +125,9 @@ export default function App() {
     recordAnswer(q, { correct: false, pointsEarned: 0, pointsMax: q?.points ?? 1 }, ms);
     addWrong();
     if (q) addError(q, null);
+    if (q?.mastery) {
+      masteryRef.current.recordMasteryAnswer(q, { correct: false, ms });
+    }
     setResults(prev => [...prev, {
       ...q,
       userAnswer: "⏱️ Čas vypršel", isCorrect: false, pointsEarned: 0, pointsMax: q?.points ?? 1,
@@ -156,17 +171,32 @@ export default function App() {
   useEffect(() => {
     if (screen === "results" && results.length > 0 && !roundCounted.current) {
       roundCounted.current = true;
-      finishRound(activeCats.length >= 2 ? 15 : 0);
+      const isMastery = roundModeRef.current === "mastery";
       const size = results.length || roundSizeRef.current;
       const pct = Math.round((results.filter(r => r.isCorrect).length / size) * 100);
-      if (pct > 80) {
-        endSession();
+
+      if (isMastery) {
+        finishRound(0);
+        const ok = isRoundSuccessful(results);
+        if (ok) {
+          masteryRef.current.recordSuccessfulRound();
+          endSession();
+        } else {
+          discardSession();
+        }
       } else {
-        discardSession();
+        finishRound(activeCats.length >= 2 ? 15 : 0);
+        if (pct > 80) {
+          endSession();
+        } else {
+          discardSession();
+        }
       }
+
       if (soundOn) {
         setTimeout(() => {
-          if (pct >= 80) playResultGreat();
+          const great = isMastery ? pct >= MASTERY_CONFIG.successPct : pct >= 80;
+          if (great) playResultGreat();
           else if (pct >= 50) playResultOk();
           else playResultBad();
         }, 300);
@@ -195,6 +225,16 @@ export default function App() {
     return d
   }
 
+  const celebrateFix = (question) => {
+    const label = `${question.shownA} × ${question.shownB} zafixováno!`;
+    setFixToast(label);
+    setConfetti(true);
+    setTimeout(() => setConfetti(false), 1200);
+    setTimeout(() => setFixToast(null), 2200);
+    addCoins(MASTERY_CONFIG.coinsPerFix);
+    setRoundCoins(co => co + MASTERY_CONFIG.coinsPerFix);
+  };
+
   const applyEvaluation = (evaluation, userAnswerLabel, delayMs = 1200) => {
     const ms = Date.now() - startRef.current;
     setAnswerMs(ms);
@@ -204,6 +244,11 @@ export default function App() {
     const partial = !ok && pointsEarned > 0;
     const detail = errorDetailFromEval(evaluation);
     recordAnswer(q, evaluation, ms);
+
+    if (q?.mastery) {
+      const { newlyFixed } = mastery.recordMasteryAnswer(q, { correct: ok, ms });
+      if (newlyFixed) celebrateFix(q);
+    }
 
     // Mince: 10 plný / 5 částečný / 0 nula. Hvězdy: stávající logika (+ násobilka).
     if (ok) {
@@ -339,10 +384,12 @@ export default function App() {
     setTimeout(advanceQuestion, 1200);
   };
 
-  const beginQuiz = (qs) => {
+  const beginQuiz = (qs, mode = "normal") => {
     initAudio();
     startSession();
     roundCounted.current = false;
+    roundModeRef.current = mode;
+    setRoundMode(mode);
     roundSizeRef.current = qs.length;
     setQuestions(qs);
     setQIdx(0);
@@ -361,7 +408,11 @@ export default function App() {
 
   const startRound = () => {
     if (activeCats.length === 0) return;
-    beginQuiz(generateQuestions(activeCats, 'advanced', progress.errorLog));
+    beginQuiz(generateQuestions(activeCats, 'advanced', progress.errorLog), "normal");
+  };
+
+  const startMasteryRound = () => {
+    beginQuiz(generateMasteryRound(mastery.entries), "mastery");
   };
 
   const toggleCat = (id) => {
@@ -519,7 +570,7 @@ export default function App() {
           {/* Time tracking */}
           <div style={{
             ...glass,
-            borderRadius: 16, padding: "12px 20px", marginBottom: 24,
+            borderRadius: 16, padding: "12px 20px", marginBottom: 16,
             display: "flex", justifyContent: "space-around",
           }}>
             <div style={{ textAlign: "center" }}>
@@ -532,6 +583,48 @@ export default function App() {
               <div style={{ fontSize: 15, fontWeight: 800, color: "#E8ECF4" }}>{formatTime(getWeekTime())}</div>
             </div>
           </div>
+
+          {/* Mistr násobilky */}
+          <button
+            onClick={() => setScreen("mastery")}
+            style={{
+              width: "100%",
+              ...glassStrong,
+              borderRadius: 20, padding: "18px 20px", marginBottom: 24,
+              cursor: "pointer", textAlign: "left",
+              border: "1.5px solid rgba(234,179,8,.45)",
+              background: "linear-gradient(135deg,rgba(234,179,8,.22),rgba(255,107,53,.12),rgba(255,255,255,.06))",
+              boxShadow: "0 6px 28px rgba(234,179,8,.2), inset 0 1px 0 rgba(255,255,255,.15)",
+              animation: "slideUp .4s ease both",
+              color: "inherit",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: "#FFD166", marginBottom: 2 }}>
+                  🏆 Mistr násobilky
+                </div>
+                <div style={{ fontSize: 12, color: "#8892A8", fontWeight: 600 }}>
+                  Malá násobilka na automatizaci · 2 úspěšná kola denně
+                </div>
+              </div>
+              <div style={{
+                fontSize: 22, fontWeight: 900, color: "#FFD166",
+                minWidth: 56, textAlign: "right",
+              }}>{mastery.pct}%</div>
+            </div>
+            <div style={{
+              height: 8, borderRadius: 4, background: "rgba(255,255,255,.08)",
+              marginTop: 12, overflow: "hidden",
+            }}>
+              <div style={{
+                height: "100%", borderRadius: 4,
+                width: `${mastery.pct}%`,
+                background: "linear-gradient(90deg,#EAB308,#FFD166)",
+                transition: "width .5s ease",
+              }} />
+            </div>
+          </button>
 
           {/* Categories */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: catHint ? 12 : 24 }}>
@@ -603,16 +696,45 @@ export default function App() {
     );
   }
 
+  // ═════════ MISTR NÁSOBILKY ═════════
+
+  if (screen === "mastery") {
+    return (
+      <div style={bgStyle}>
+        <style>{css}</style>
+        <BgBlobs />
+        {confetti && <ConfettiBurst />}
+        <div style={wrapStyle}>
+          <NasobilkaMasteryScreen
+            entries={mastery.entries}
+            fixed={mastery.fixed}
+            pct={mastery.pct}
+            dailySuccessful={mastery.dailySuccessful}
+            dailyGoal={mastery.dailyGoal}
+            allFixed={mastery.allFixed}
+            showBigCelebration={mastery.showBigCelebration}
+            fixToast={fixToast}
+            onStartRound={startMasteryRound}
+            onBack={() => setScreen("dashboard")}
+            onDismissCelebration={() => mastery.markCelebrationSeen()}
+          />
+        </div>
+      </div>
+    );
+  }
+
   // ═════════ QUIZ ═════════
 
   if (screen === "quiz" && q) {
     const catFromReg = getCategory(q.category);
-    const catMeta = CATS.find(c => c.id === q.category) || {
-      id: q.category,
-      icon: catFromReg?.icon || "✏️",
-      color: "#E85D3A",
-      label: catFromReg?.name || q.category,
-    };
+    const catMeta = q.mastery
+      ? { id: "nasobilka-mastery", icon: "🏆", color: "#EAB308", label: "Mistr násobilky" }
+      : (CATS.find(c => c.id === q.category) || {
+          id: q.category,
+          icon: catFromReg?.icon || "✏️",
+          color: "#E85D3A",
+          label: catFromReg?.name || q.category,
+        });
     const roundLen = questions.length || roundSizeRef.current;
     const isAnSvazek = q.type === "an-svazek";
     const isOtevrena = q.type === "otevrena";
@@ -668,6 +790,19 @@ export default function App() {
         <style>{css}</style>
         <BgBlobs />
         {confetti && <ConfettiBurst />}
+        {fixToast && (
+          <div style={{
+            position: "fixed", top: 24, left: "50%", transform: "translateX(-50%)",
+            zIndex: 900, ...glassStrong,
+            padding: "12px 20px", borderRadius: 16,
+            fontWeight: 800, color: "#FFD166", fontSize: 15,
+            border: "1px solid rgba(255,209,102,.4)",
+            animation: "popIn .35s ease",
+            whiteSpace: "nowrap",
+          }}>
+            ✨ {fixToast}
+          </div>
+        )}
         <div style={wrapStyle}>
           {/* Top bar */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -854,17 +989,29 @@ export default function App() {
   // ═════════ RESULTS ═════════
 
   if (screen === "results") {
+    const isMastery = roundMode === "mastery";
     const size = results.length || roundSizeRef.current;
     const correct = results.filter(r => r.isCorrect).length;
     const pct = Math.round((correct / size) * 100);
     const mistakes = results.filter(r => !r.isCorrect);
+    const masteryOk = isMastery && isRoundSuccessful(results);
     let emoji = "🎉", msg = "Fantastické kolo!";
-    if (pct < 50) { emoji = "💪"; msg = "Nevadí, příště to bude lepší!"; }
-    else if (pct < 80) { emoji = "👍"; msg = "Dobrá práce!"; }
-    else if (pct < 100) { emoji = "🌟"; msg = "Skvělý výkon!"; }
+    if (isMastery) {
+      if (masteryOk) {
+        emoji = pct === 100 ? "🎉" : "🌟";
+        msg = pct === 100 ? "Mistrovské kolo!" : "Úspěšné kolo (≥90 %)!";
+      } else if (pct < 50) {
+        emoji = "💪"; msg = "Nevadí, příště to bude lepší!";
+      } else {
+        emoji = "👍"; msg = "Těsně — potřebuješ aspoň 90 %";
+      }
+    } else {
+      if (pct < 50) { emoji = "💪"; msg = "Nevadí, příště to bude lepší!"; }
+      else if (pct < 80) { emoji = "👍"; msg = "Dobrá práce!"; }
+      else if (pct < 100) { emoji = "🌟"; msg = "Skvělý výkon!"; }
+    }
 
-    // Add mix bonus
-    const mixBonus = activeCats.length >= 2 ? 15 : 0;
+    const mixBonus = !isMastery && activeCats.length >= 2 ? 15 : 0;
     const totalCoins = roundCoins + mixBonus;
 
     return (
@@ -894,6 +1041,16 @@ export default function App() {
               WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
             }}>{pct}%</div>
             <div style={{ fontSize: 14, color: "#8892A8", marginTop: 4 }}>{correct} z {size} správně</div>
+            {isMastery && (
+              <div style={{
+                marginTop: 10, fontSize: 13, fontWeight: 700,
+                color: masteryOk ? "#4ADE80" : "#F87171",
+              }}>
+                {masteryOk
+                  ? `✓ Počítá se do denního cíle (${mastery.dailySuccessful} / ${mastery.dailyGoal})`
+                  : "✗ Do denního cíle se nepočítá"}
+              </div>
+            )}
             <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 16, fontWeight: 700 }}>
                 <span>⭐</span><span style={{ color: "#FFD166" }}>+{roundStars}</span>
@@ -941,7 +1098,7 @@ export default function App() {
 
           <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
             <button
-              onClick={() => setScreen("dashboard")}
+              onClick={() => setScreen(isMastery ? "mastery" : "dashboard")}
               style={{
                 ...glass,
                 flex: 1, padding: 16, borderRadius: 18,
@@ -950,7 +1107,7 @@ export default function App() {
               }}
             >🏠 Zpět</button>
             <button
-              onClick={startRound}
+              onClick={isMastery ? startMasteryRound : startRound}
               style={{
                 ...glass,
                 flex: 1, padding: 16, borderRadius: 18,
