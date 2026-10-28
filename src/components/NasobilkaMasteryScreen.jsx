@@ -4,6 +4,7 @@ import ConfettiBurst from './ConfettiBurst'
 import {
   MASTERY_CONFIG,
   STATE_COLORS,
+  STATE_FIXED_GLOW,
   STATE_LABELS,
   MASTERY_STATES,
   cellState,
@@ -62,14 +63,18 @@ export default function NasobilkaMasteryScreen({
       {fixToast && (
         <div style={{
           position: 'fixed', top: 24, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 900, ...glassStrong,
+          zIndex: 900,
           padding: '12px 20px', borderRadius: 16,
-          fontWeight: 800, color: '#FFD166', fontSize: 15,
-          border: '1px solid rgba(255,209,102,.4)',
+          fontWeight: 800,
+          fontSize: 15,
+          color: '#1F2937',
+          background: STATE_COLORS[MASTERY_STATES.ZAFIXOVANO],
+          border: `1px solid ${STATE_COLORS[MASTERY_STATES.ZAFIXOVANO]}`,
+          boxShadow: STATE_FIXED_GLOW,
           animation: 'popIn .35s ease',
           whiteSpace: 'nowrap',
         }}>
-          ✨ {fixToast}
+          ⭐ {fixToast}
         </div>
       )}
 
@@ -103,10 +108,14 @@ export default function NasobilkaMasteryScreen({
         {Object.entries(STATE_LABELS).map(([k, label]) => (
           <span key={k} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{
-              width: 10, height: 10, borderRadius: 3,
+              width: 12, height: 12, borderRadius: 3,
               background: STATE_COLORS[k],
-              boxShadow: k === MASTERY_STATES.ZAFIXOVANO ? '0 0 6px #EAB30888' : 'none',
-            }} />
+              boxShadow: k === MASTERY_STATES.ZAFIXOVANO ? STATE_FIXED_GLOW : 'none',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 8, lineHeight: 1,
+            }}>
+              {k === MASTERY_STATES.ZAFIXOVANO ? '⭐' : null}
+            </span>
             {label}
           </span>
         ))}
@@ -139,6 +148,7 @@ export default function NasobilkaMasteryScreen({
               {ROWS.map(col => {
                 const stav = cellState(entries, row, col)
                 const color = STATE_COLORS[stav]
+                const isFixed = stav === MASTERY_STATES.ZAFIXOVANO
                 return (
                   <div
                     key={`${row}x${col}`}
@@ -147,13 +157,17 @@ export default function NasobilkaMasteryScreen({
                       aspectRatio: '1',
                       borderRadius: 6,
                       background: color,
-                      opacity: stav === MASTERY_STATES.NEZNAMO ? 0.45 : 0.9,
-                      boxShadow: stav === MASTERY_STATES.ZAFIXOVANO
-                        ? '0 0 8px #EAB30866, inset 0 1px 0 rgba(255,255,255,.25)'
-                        : 'inset 0 1px 0 rgba(255,255,255,.12)',
-                      border: '1px solid rgba(255,255,255,.08)',
+                      boxShadow: isFixed ? STATE_FIXED_GLOW : 'none',
+                      border: '1px solid transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 'clamp(8px, 2.2vw, 12px)',
+                      lineHeight: 1,
                     }}
-                  />
+                  >
+                    {isFixed ? '⭐' : null}
+                  </div>
                 )
               })}
             </Fragment>

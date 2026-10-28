@@ -28,12 +28,15 @@ export const STATE_WEIGHTS = {
   [MASTERY_STATES.ZAFIXOVANO]: 0.5,
 }
 
+/** Plné neprůhledné barvy stavů — jedno místo pro mřížku, legendu i toast. */
 export const STATE_COLORS = {
-  [MASTERY_STATES.NEZNAMO]: '#6B7280',
-  [MASTERY_STATES.UCIM_SE]: '#F59E0B',
+  [MASTERY_STATES.NEZNAMO]: '#4B5563',
+  [MASTERY_STATES.UCIM_SE]: '#3B82F6',
   [MASTERY_STATES.UMIM]: '#22C55E',
-  [MASTERY_STATES.ZAFIXOVANO]: '#EAB308',
+  [MASTERY_STATES.ZAFIXOVANO]: '#FBBF24',
 }
+
+export const STATE_FIXED_GLOW = '0 0 8px rgba(251,191,36,.6)'
 
 export const STATE_LABELS = {
   [MASTERY_STATES.NEZNAMO]: 'Neznámé',

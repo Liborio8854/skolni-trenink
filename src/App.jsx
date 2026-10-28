@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { CATS, MOTIVACE, SPATNE, ROUND_SIZE } from "./data/constants";
 import { getCategory } from "./data/categories";
 import { generateQuestions, shuffledVyberOptions, vyberCorrectOptionId } from "./utils/questions";
-import { generateMasteryRound, isRoundSuccessful, MASTERY_CONFIG } from "./data/nasobilkaMastery";
+import { generateMasteryRound, isRoundSuccessful, MASTERY_CONFIG, STATE_COLORS, STATE_FIXED_GLOW, MASTERY_STATES } from "./data/nasobilkaMastery";
 import { evaluateAnswer } from "./utils/evaluate";
 import { glass, glassStrong, glassBadge, bgStyle, wrapStyle, BgBlobs } from "./utils/styles";
 import { useProgress } from "./hooks/useProgress";
@@ -800,14 +800,17 @@ export default function App() {
         {fixToast && (
           <div style={{
             position: "fixed", top: 24, left: "50%", transform: "translateX(-50%)",
-            zIndex: 900, ...glassStrong,
+            zIndex: 900,
             padding: "12px 20px", borderRadius: 16,
-            fontWeight: 800, color: "#FFD166", fontSize: 15,
-            border: "1px solid rgba(255,209,102,.4)",
+            fontWeight: 800, fontSize: 15,
+            color: "#1F2937",
+            background: STATE_COLORS[MASTERY_STATES.ZAFIXOVANO],
+            border: `1px solid ${STATE_COLORS[MASTERY_STATES.ZAFIXOVANO]}`,
+            boxShadow: STATE_FIXED_GLOW,
             animation: "popIn .35s ease",
             whiteSpace: "nowrap",
           }}>
-            ✨ {fixToast}
+            ⭐ {fixToast}
           </div>
         )}
         <div style={wrapStyle}>
