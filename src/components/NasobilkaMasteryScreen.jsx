@@ -97,7 +97,7 @@ export default function NasobilkaMasteryScreen({
         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
       }}>🏆 Mistr násobilky</div>
       <div style={{ fontSize: 13, color: '#8892A8', textAlign: 'center', marginBottom: 20 }}>
-        Malá násobilka 2–9 · blesk do 3 s
+        Malá násobilka 2–9 · limit 6 s · blesk do 3 s · učím se 3–6 s
       </div>
 
       {/* Legenda */}

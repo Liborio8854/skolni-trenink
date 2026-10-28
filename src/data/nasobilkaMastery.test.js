@@ -4,6 +4,11 @@
 import {
   mergeMasteryEntries,
   MASTERY_STATES,
+  MASTERY_CONFIG,
+  masteryDistractors,
+  allMultiplicationProducts,
+  allMasteryPairs,
+  generateMasteryRound,
 } from './nasobilkaMastery.js'
 import { localDateKey } from '../utils/date.js'
 
@@ -76,6 +81,44 @@ function assert(cond, msg) {
   const summerMorning = new Date('2026-07-14T22:30:00.000Z')
   assert(localDateKey(summerMorning) === '2026-07-15', `Summer morning expected 2026-07-15, got ${localDateKey(summerMorning)}`)
   assert(summerMorning.toISOString().slice(0, 10) === '2026-07-14', 'UTC slice wrong in summer too')
+}
+
+// Časový limit mastery kola
+assert(MASTERY_CONFIG.timeLimit === 6, `timeLimit expected 6, got ${MASTERY_CONFIG.timeLimit}`)
+assert(MASTERY_CONFIG.flashMs === 3000, 'flash stays 3 s')
+
+// Distraktory jsou vždy výsledky násobilky (tabulka 2–9)
+{
+  const table = allMultiplicationProducts()
+  for (const { a, b } of allMasteryPairs()) {
+    for (let trial = 0; trial < 8; trial++) {
+      const opts = masteryDistractors(a, b)
+      const correct = a * b
+      assert(opts.length === 4, `${a}×${b}: expected 4 options, got ${opts.length}`)
+      assert(new Set(opts).size === 4, `${a}×${b}: options not unique ${opts}`)
+      assert(opts.every(v => v > 0), `${a}×${b}: non-positive ${opts}`)
+      assert(opts.includes(correct), `${a}×${b}: missing correct ${correct}`)
+      for (const v of opts) {
+        assert(table.has(v), `${a}×${b}: ${v} is not a 2–9 multiplication product`)
+      }
+    }
+  }
+
+  // 6×9 má mezi kandidáty záměnu 7×8 (=56)
+  {
+    let saw56 = false
+    for (let i = 0; i < 40; i++) {
+      if (masteryDistractors(6, 9).includes(56)) { saw56 = true; break }
+    }
+    assert(saw56, '6×9 should sometimes offer 7×8=56 as distractor')
+  }
+
+  const qs = generateMasteryRound({})
+  assert(qs.every(q => q.timeLimit === 6), 'round questions use 6 s limit')
+  for (const q of qs) {
+    const nums = q.options.map(Number)
+    assert(nums.every(n => table.has(n)), `round opts not table products: ${nums}`)
+  }
 }
 
 if (fails.length) {

@@ -9,7 +9,7 @@ export const MASTERY_CONFIG = {
   dailyGoalRounds: 2,
   roundSize: 10,
   successPct: 90,
-  timeLimit: 8,
+  timeLimit: 6,
   flashMs: 3000,
   totalExamples: 36,
 }
@@ -226,22 +226,67 @@ export function chooseDisplayOrder(entry, a, b) {
   return { shownA: b, shownB: a }
 }
 
-function mathOpts(correct) {
-  const opts = [correct]
-  let att = 0
-  while (opts.length < 4 && att < 50) {
-    att++
-    const off = Math.floor(Math.random() * 20) - 10
-    const v = correct + off
-    if (v > 0 && !opts.includes(v)) opts.push(v)
+/** Všechny součky malé násobilky 2–9 (včetně obou pořadí). */
+export function allMultiplicationProducts() {
+  const set = new Set()
+  for (let i = 2; i <= 9; i++) {
+    for (let j = 2; j <= 9; j++) set.add(i * j)
   }
-  while (opts.length < 4) opts.push(correct + opts.length * 3)
-  // shuffle
-  for (let i = opts.length - 1; i > 0; i--) {
+  return set
+}
+
+const TABLE_PRODUCTS = allMultiplicationProducts()
+
+function shuffleInPlace(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
-    ;[opts[i], opts[j]] = [opts[j], opts[i]]
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
   }
-  return opts
+  return arr
+}
+
+/**
+ * 4 možnosti pro a×b: správná + distraktory ze sousedních výsledků násobilky
+ * ((a±1)×b, a×(b±1), záměny typu (a±1)×(b∓1)).
+ * Preferuje součky z tabulky 2–9; všechny 4 různé a kladné; správná na náhodné pozici.
+ */
+export function masteryDistractors(a, b) {
+  const correct = a * b
+  const neighbors = []
+
+  for (const da of [-1, 1]) {
+    const na = a + da
+    if (na > 0) neighbors.push(na * b)
+  }
+  for (const db of [-1, 1]) {
+    const nb = b + db
+    if (nb > 0) neighbors.push(a * nb)
+  }
+  // Záměny (např. 6×9 ↔ 7×8)
+  if (a > 1) neighbors.push((a - 1) * (b + 1))
+  if (b > 1) neighbors.push((a + 1) * (b - 1))
+  if (a > 1 && b > 1) neighbors.push((a - 1) * (b - 1))
+  neighbors.push((a + 1) * (b + 1))
+
+  // Jen součky z tabulky 2–9 (sousedé mimo tabulku, např. 10×9, vynecháme)
+  const preferred = shuffleInPlace(
+    [...new Set(neighbors)].filter(v => v > 0 && v !== correct && TABLE_PRODUCTS.has(v)),
+  )
+
+  const opts = [correct]
+  for (const v of preferred) {
+    if (opts.length >= 4) break
+    opts.push(v)
+  }
+  if (opts.length < 4) {
+    const fallback = shuffleInPlace([...TABLE_PRODUCTS])
+    for (const v of fallback) {
+      if (opts.length >= 4) break
+      if (!opts.includes(v)) opts.push(v)
+    }
+  }
+
+  return shuffleInPlace(opts)
 }
 
 /**
@@ -272,7 +317,7 @@ export function generateMasteryRound(entriesMap) {
   return selected.map(({ a, b, key, entry }) => {
     const { shownA, shownB } = chooseDisplayOrder(entry, a, b)
     const answer = shownA * shownB
-    const opts = mathOpts(answer)
+    const opts = masteryDistractors(shownA, shownB)
     const options = opts.map(String)
     const correctIdx = opts.indexOf(answer)
     const display = `${shownA} × ${shownB}`
