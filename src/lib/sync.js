@@ -1,4 +1,5 @@
 import { supabase, TABLES } from './supabase'
+import { masteryEntryForUpsert } from '../data/nasobilkaMastery'
 
 /**
  * Sloučí herní stav: lokální je zdroj pravdy, při konfliktu bereme vyšší hodnotu.
@@ -181,19 +182,12 @@ export async function fetchNasobilkaMastery(userId) {
 }
 
 export async function upsertNasobilkaMasteryEntry(userId, entry) {
-  if (!userId || !entry?.priklad) return
+  // Bez aktualizovano z odpovědi neukládej — nikdy nedoplňuj now() (zkreslilo by váhy).
+  const payload = masteryEntryForUpsert(entry)
+  if (!userId || !payload) return
   try {
     const { error } = await supabase.from(TABLES.nasobilkaMastery).upsert(
-      {
-        user_id: userId,
-        priklad: entry.priklad,
-        stav: entry.stav,
-        serie: entry.serie || 0,
-        blesk_dny: entry.blesk_dny || [],
-        blesk_ab: !!entry.blesk_ab,
-        blesk_ba: !!entry.blesk_ba,
-        aktualizovano: entry.aktualizovano || new Date().toISOString(),
-      },
+      { user_id: userId, ...payload },
       { onConflict: 'user_id,priklad' },
     )
     if (error) {

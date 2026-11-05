@@ -70,7 +70,61 @@ export const STATE_WEIGHTS = {
   [MASTERY_STATES.NEZNAMO]: 4,
   [MASTERY_STATES.UCIM_SE]: 3,
   [MASTERY_STATES.UMIM]: 2,
+  /** Základní váha zafixovaného (0–2 dny od posledního zobrazení). */
   [MASTERY_STATES.ZAFIXOVANO]: 0.5,
+}
+
+/** Min. počet zafixovaných příkladů neviděných 5+ dní, které se snažíme dát do každého kola. */
+export const STALE_FIXED_PER_ROUND = 2
+
+/**
+ * Počet celých kalendářních dní (Europe/Prague) mezi dvěma YYYY-MM-DD.
+ * @param {string} fromKey
+ * @param {string} toKey
+ */
+export function daysBetweenDateKeys(fromKey, toKey) {
+  const [y1, m1, d1] = String(fromKey).split('-').map(Number)
+  const [y2, m2, d2] = String(toKey).split('-').map(Number)
+  if (![y1, m1, d1, y2, m2, d2].every(Number.isFinite)) return 0
+  const ms = Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)
+  return Math.round(ms / 86_400_000)
+}
+
+/**
+ * Dny od posledního zobrazení (= aktualizovano po odpovědi).
+ * Chybějící čas = nikdy / neznámo → Infinity (váha jako 5+ dní).
+ * @param {{ aktualizovano?: string|null }} entry
+ * @param {Date} [now]
+ */
+export function daysSinceLastSeen(entry, now = new Date()) {
+  if (!entry?.aktualizovano) return Number.POSITIVE_INFINITY
+  const t = Date.parse(entry.aktualizovano)
+  if (!Number.isFinite(t)) return Number.POSITIVE_INFINITY
+  return Math.max(0, daysBetweenDateKeys(localDateKey(new Date(t)), localDateKey(now)))
+}
+
+/**
+ * Váha zafixovaného příkladu podle stáří od posledního zobrazení.
+ * 0–2 dny → 0,5; 3–4 dny → 2; 5+ dní → 4.
+ * @param {number} days
+ */
+export function fixedExampleWeight(days) {
+  if (!Number.isFinite(days) || days >= 5) return 4
+  if (days >= 3) return 2
+  return 0.5
+}
+
+/**
+ * Váha příkladu pro výběr do kola (u zafixovaných podle stáří).
+ * @param {{ stav?: string, aktualizovano?: string|null }} entry
+ * @param {Date} [now]
+ */
+export function masterySelectionWeight(entry, now = new Date()) {
+  const stav = entry?.stav || MASTERY_STATES.NEZNAMO
+  if (stav === MASTERY_STATES.ZAFIXOVANO) {
+    return fixedExampleWeight(daysSinceLastSeen(entry, now))
+  }
+  return STATE_WEIGHTS[stav] ?? STATE_WEIGHTS[MASTERY_STATES.NEZNAMO]
 }
 
 /** Plné neprůhledné barvy stavů — jedno místo pro mřížku, legendu i toast. */
@@ -138,6 +192,26 @@ export function normalizeMasteryEntry(row) {
   }
 }
 
+/**
+ * Payload pro upsert do st_nasobilka_mastery.
+ * aktualizovano se nesmí vymýšlet (now) — jen čas z applyMasteryAnswer.
+ * Bez prikladu / bez aktualizovano → null (upsert se neprovede).
+ * @param {object} entry
+ * @returns {object|null}
+ */
+export function masteryEntryForUpsert(entry) {
+  if (!entry?.priklad || !entry.aktualizovano) return null
+  return {
+    priklad: entry.priklad,
+    stav: entry.stav || MASTERY_STATES.NEZNAMO,
+    serie: entry.serie || 0,
+    blesk_dny: Array.isArray(entry.blesk_dny) ? entry.blesk_dny : [],
+    blesk_ab: !!entry.blesk_ab,
+    blesk_ba: !!entry.blesk_ba,
+    aktualizovano: entry.aktualizovano,
+  }
+}
+
 export function ensureEntries(map) {
   const next = { ...(map || {}) }
   for (const { key } of allMasteryPairs()) {
@@ -202,7 +276,11 @@ export function applyMasteryAnswer(entry, answer) {
 
   if (!isFlash) {
     if (wasFixed) {
-      return { entry: prev, newlyFixed: false }
+      // Stav beze změny, ale aktualizovano = čas posledního zobrazení (pro váhy).
+      return {
+        entry: { ...prev, aktualizovano: now },
+        newlyFixed: false,
+      }
     }
     return {
       entry: {
@@ -339,11 +417,23 @@ export function masteryDistractors(a, b) {
   return shuffleInPlace(opts)
 }
 
+/** Vážený výběr z `candidates`; odebere stejný objekt z `remaining`. */
+function takeWeightedFrom(remaining, candidates, weightFn) {
+  const pick = pickWeighted(candidates, weightFn)
+  const idx = remaining.indexOf(pick)
+  if (idx >= 0) remaining.splice(idx, 1)
+  return pick
+}
+
 /**
  * Vážený výběr 10 příkladů bez opakování.
+ * Zafixované: váha roste se stářím (aktualizovano). Do kola jde aspoň
+ * STALE_FIXED_PER_ROUND zafixovaných neviděných 5+ dní, pokud existují.
+ * @param {object} [entriesMap]
+ * @param {Date} [now]
  * @returns {object[]} otázky kompatibilní s quiz UI
  */
-export function generateMasteryRound(entriesMap) {
+export function generateMasteryRound(entriesMap, now = new Date()) {
   const entries = ensureEntries(entriesMap)
   const pool = allMasteryPairs().map(p => ({
     ...p,
@@ -353,15 +443,21 @@ export function generateMasteryRound(entriesMap) {
   const selected = []
   const remaining = [...pool]
   const n = Math.min(MASTERY_CONFIG.roundSize, remaining.length)
+  const weightFn = item => masterySelectionWeight(item.entry, now)
 
-  for (let i = 0; i < n; i++) {
-    const pick = pickWeighted(
-      remaining,
-      item => STATE_WEIGHTS[item.entry.stav] ?? STATE_WEIGHTS[MASTERY_STATES.NEZNAMO],
-    )
-    const idx = remaining.indexOf(pick)
-    remaining.splice(idx, 1)
-    selected.push(pick)
+  // Rezervuj zafixované neviděné 5+ dní (max STALE_FIXED_PER_ROUND).
+  const staleFixedOf = list => list.filter(
+    item =>
+      item.entry.stav === MASTERY_STATES.ZAFIXOVANO
+      && daysSinceLastSeen(item.entry, now) >= 5,
+  )
+  const reserveCount = Math.min(STALE_FIXED_PER_ROUND, staleFixedOf(remaining).length, n)
+  for (let i = 0; i < reserveCount; i++) {
+    selected.push(takeWeightedFrom(remaining, staleFixedOf(remaining), weightFn))
+  }
+
+  while (selected.length < n) {
+    selected.push(takeWeightedFrom(remaining, remaining, weightFn))
   }
 
   return selected.map(({ a, b, key, entry }) => {

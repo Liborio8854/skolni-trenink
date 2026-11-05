@@ -11,8 +11,14 @@ import {
   generateMasteryRound,
   applyMasteryAnswer,
   emptyEntry,
+  ensureEntries,
   countGoalDays,
   getRewardProgress,
+  fixedExampleWeight,
+  daysSinceLastSeen,
+  masterySelectionWeight,
+  masteryEntryForUpsert,
+  STALE_FIXED_PER_ROUND,
 } from './nasobilkaMastery.js'
 import { localDateKey } from '../utils/date.js'
 
@@ -174,6 +180,227 @@ assert(MASTERY_CONFIG.requiredGoalDays === 15, `requiredGoalDays expected 15, go
   assert(r.entry.blesk_dny.length >= 3, `expected ≥3 days, got ${r.entry.blesk_dny.length}`)
   assert(r.entry.stav === MASTERY_STATES.ZAFIXOVANO, '3 days should fix')
   assert(r.newlyFixed === true, 'newlyFixed true')
+}
+
+// aktualizovano se mění jen po odpovědi — ne při merge / ensure / upsert payloadu
+{
+  const oldTs = '2026-01-01T10:00:00.000Z'
+  const newerTs = '2026-01-03T10:00:00.000Z'
+
+  // ensureEntries doplní chybějící klíče s null, nepřepisuje existující čas
+  {
+    const ensured = ensureEntries({
+      '2×2': {
+        ...emptyEntry('2×2'),
+        stav: MASTERY_STATES.ZAFIXOVANO,
+        aktualizovano: oldTs,
+      },
+    })
+    assert(ensured['2×2'].aktualizovano === oldTs, 'ensure keeps existing aktualizovano')
+    assert(ensured['2×3'].aktualizovano === null, 'ensure fills missing with null, not now')
+  }
+
+  // merge: nedotčený klíč si nechá čas; cizí remote řádek neovlivní ostatní
+  {
+    const local = {
+      '2×2': {
+        ...emptyEntry('2×2'),
+        stav: MASTERY_STATES.ZAFIXOVANO,
+        serie: 3,
+        blesk_ab: true,
+        blesk_ba: true,
+        aktualizovano: oldTs,
+      },
+      '3×3': {
+        ...emptyEntry('3×3'),
+        stav: MASTERY_STATES.UMIM,
+        serie: 1,
+        blesk_ab: true,
+        aktualizovano: oldTs,
+      },
+    }
+    const remote = [{
+      priklad: '3×3',
+      stav: MASTERY_STATES.UMIM,
+      serie: 2,
+      blesk_dny: ['2026-01-02'],
+      blesk_ab: true,
+      blesk_ba: false,
+      aktualizovano: newerTs,
+    }]
+    const merged = mergeMasteryEntries(local, remote)
+    assert(merged['2×2'].aktualizovano === oldTs, 'merge must not touch other keys’ aktualizovano')
+    assert(merged['3×3'].aktualizovano === newerTs, 'merge takes newer remote for that key only')
+    assert(merged['4×4'].aktualizovano === null, 'merge/ensure must not invent now for empty keys')
+  }
+
+  // Odpověď změní aktualizovano jen u daného entry objektu
+  {
+    const before = {
+      ...emptyEntry('7×8'),
+      stav: MASTERY_STATES.UMIM,
+      serie: 1,
+      blesk_ab: true,
+      aktualizovano: oldTs,
+    }
+    const other = {
+      ...emptyEntry('6×7'),
+      stav: MASTERY_STATES.ZAFIXOVANO,
+      aktualizovano: oldTs,
+    }
+    const { entry } = applyMasteryAnswer(before, {
+      correct: true,
+      ms: 1000,
+      shownA: 7,
+      shownB: 8,
+    })
+    assert(entry.aktualizovano !== oldTs, 'answer updates aktualizovano')
+    assert(typeof entry.aktualizovano === 'string' && entry.aktualizovano.length > 0, 'answer sets ISO time')
+    assert(other.aktualizovano === oldTs, 'other entry object untouched')
+  }
+
+  // Upsert payload: nikdy nedoplňuje now(); bez času → null (žádný zápis)
+  {
+    const answered = {
+      priklad: '7×8',
+      stav: MASTERY_STATES.UMIM,
+      serie: 1,
+      blesk_dny: ['2026-01-01'],
+      blesk_ab: true,
+      blesk_ba: false,
+      aktualizovano: oldTs,
+    }
+    const payload = masteryEntryForUpsert(answered)
+    assert(payload !== null, 'payload with aktualizovano is allowed')
+    assert(payload.aktualizovano === oldTs, 'upsert payload keeps answer time, does not invent now')
+    assert(masteryEntryForUpsert({ ...answered, aktualizovano: null }) === null, 'null aktualizovano → no upsert')
+    assert(masteryEntryForUpsert({ ...answered, aktualizovano: undefined }) === null, 'missing aktualizovano → no upsert')
+    assert(masteryEntryForUpsert({ stav: MASTERY_STATES.NEZNAMO }) === null, 'no priklad → no upsert')
+  }
+}
+
+// Váhy zafixovaného podle dní od posledního zobrazení
+{
+  assert(fixedExampleWeight(0) === 0.5, '0 dní → 0.5')
+  assert(fixedExampleWeight(1) === 0.5, '1 den → 0.5')
+  assert(fixedExampleWeight(2) === 0.5, '2 dny → 0.5')
+  assert(fixedExampleWeight(3) === 2, '3 dny → 2')
+  assert(fixedExampleWeight(4) === 2, '4 dny → 2')
+  assert(fixedExampleWeight(5) === 4, '5 dní → 4')
+  assert(fixedExampleWeight(10) === 4, '10 dní → 4')
+  assert(fixedExampleWeight(Number.POSITIVE_INFINITY) === 4, 'Infinity → 4')
+
+  const now = new Date('2026-11-05T12:00:00.000Z')
+  const daysAgoIso = (days) => {
+    const d = new Date(now)
+    d.setUTCDate(d.getUTCDate() - days)
+    return d.toISOString()
+  }
+
+  assert(daysSinceLastSeen({ aktualizovano: daysAgoIso(0) }, now) === 0, 'seen today → 0')
+  assert(daysSinceLastSeen({ aktualizovano: daysAgoIso(3) }, now) === 3, '3 days ago')
+  assert(daysSinceLastSeen({ aktualizovano: daysAgoIso(5) }, now) === 5, '5 days ago')
+  assert(daysSinceLastSeen({ aktualizovano: null }, now) === Number.POSITIVE_INFINITY, 'null → Infinity')
+  assert(daysSinceLastSeen({}, now) === Number.POSITIVE_INFINITY, 'missing → Infinity')
+
+  assert(
+    masterySelectionWeight({ stav: MASTERY_STATES.ZAFIXOVANO, aktualizovano: daysAgoIso(1) }, now) === 0.5,
+    'fresh fixed weight 0.5',
+  )
+  assert(
+    masterySelectionWeight({ stav: MASTERY_STATES.ZAFIXOVANO, aktualizovano: daysAgoIso(4) }, now) === 2,
+    'mid fixed weight 2',
+  )
+  assert(
+    masterySelectionWeight({ stav: MASTERY_STATES.ZAFIXOVANO, aktualizovano: daysAgoIso(7) }, now) === 4,
+    'stale fixed weight 4',
+  )
+  assert(
+    masterySelectionWeight({ stav: MASTERY_STATES.NEZNAMO }, now) === 4,
+    'neznamo stays 4',
+  )
+  assert(
+    masterySelectionWeight({ stav: MASTERY_STATES.UCIM_SE }, now) === 3,
+    'ucim_se stays 3',
+  )
+  assert(
+    masterySelectionWeight({ stav: MASTERY_STATES.UMIM }, now) === 2,
+    'umim stays 2',
+  )
+}
+
+// Kolo: aspoň 2 zafixované neviděné 5+ dní (pokud existují)
+{
+  const now = new Date('2026-11-05T12:00:00.000Z')
+  const daysAgoIso = (days) => {
+    const d = new Date(now)
+    d.setUTCDate(d.getUTCDate() - days)
+    return d.toISOString()
+  }
+  const fixedEntry = (key, daysAgo) => ({
+    ...emptyEntry(key),
+    stav: MASTERY_STATES.ZAFIXOVANO,
+    serie: 3,
+    blesk_dny: ['2026-10-01', '2026-10-02', '2026-10-03'],
+    blesk_ab: true,
+    blesk_ba: true,
+    aktualizovano: daysAgoIso(daysAgo),
+  })
+
+  const pairs = allMasteryPairs()
+  assert(STALE_FIXED_PER_ROUND === 2, 'reserve 2 stale fixed')
+
+  // 5 starých zafixovaných + zbytek čerstvých / neznámých → každé kolo ≥2 staré
+  {
+    const map = {}
+    const staleKeys = []
+    pairs.forEach((p, i) => {
+      if (i < 5) {
+        map[p.key] = fixedEntry(p.key, 6 + i)
+        staleKeys.push(p.key)
+      } else if (i < 10) {
+        map[p.key] = fixedEntry(p.key, 1)
+      }
+    })
+    for (let trial = 0; trial < 30; trial++) {
+      const qs = generateMasteryRound(map, now)
+      const keys = qs.map(q => q.masteryKey)
+      const staleInRound = keys.filter(k => staleKeys.includes(k))
+      assert(
+        staleInRound.length >= 2,
+        `trial ${trial}: expected ≥2 stale fixed, got ${staleInRound.length} (${staleInRound})`,
+      )
+      assert(new Set(keys).size === keys.length, `trial ${trial}: duplicate keys`)
+      assert(qs.length === MASTERY_CONFIG.roundSize, `trial ${trial}: round size`)
+    }
+  }
+
+  // Jen 1 starý → musí být v kole (pravidlo „pokud takové existují“)
+  {
+    const map = {}
+    const onlyStale = pairs[0].key
+    map[onlyStale] = fixedEntry(onlyStale, 8)
+    for (let i = 1; i < 8; i++) {
+      map[pairs[i].key] = fixedEntry(pairs[i].key, 0)
+    }
+    for (let trial = 0; trial < 20; trial++) {
+      const qs = generateMasteryRound(map, now)
+      assert(
+        qs.some(q => q.masteryKey === onlyStale),
+        `trial ${trial}: single stale fixed must appear`,
+      )
+    }
+  }
+
+  // Žádný starý zafixovaný → kolo běží bez chyby, žádná rezervace
+  {
+    const map = {}
+    for (let i = 0; i < 6; i++) {
+      map[pairs[i].key] = fixedEntry(pairs[i].key, 1)
+    }
+    const qs = generateMasteryRound(map, now)
+    assert(qs.length === MASTERY_CONFIG.roundSize, 'no-stale round still size 10')
+  }
 }
 
 // Distraktory jsou vždy výsledky násobilky (tabulka 2–9)
