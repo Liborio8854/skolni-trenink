@@ -2,7 +2,16 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { CATS, MOTIVACE, SPATNE, ROUND_SIZE } from "./data/constants";
 import { getCategory } from "./data/categories";
 import { generateQuestions, shuffledVyberOptions, vyberCorrectOptionId } from "./utils/questions";
-import { generateMasteryRound, isRoundSuccessful, MASTERY_CONFIG, STATE_COLORS, STATE_FIXED_GLOW, MASTERY_STATES } from "./data/nasobilkaMastery";
+import {
+  generateMasteryRound,
+  generateBigCheckRound,
+  evaluateBigCheck,
+  isRoundSuccessful,
+  MASTERY_CONFIG,
+  STATE_COLORS,
+  STATE_FIXED_GLOW,
+  MASTERY_STATES,
+} from "./data/nasobilkaMastery";
 import { evaluateAnswer } from "./utils/evaluate";
 import { glass, glassStrong, glassBadge, bgStyle, wrapStyle, BgBlobs } from "./utils/styles";
 import { useProgress } from "./hooks/useProgress";
@@ -46,7 +55,8 @@ export default function App() {
   const mastery = useNasobilkaMastery(user?.id);
   const [soundOn, setSoundOn] = useState(true);
   const [screen, setScreen] = useState("dashboard");
-  const [roundMode, setRoundMode] = useState("normal"); // normal | mastery
+  const [roundMode, setRoundMode] = useState("normal"); // normal | mastery | bigcheck
+  const [bigCheckResult, setBigCheckResult] = useState(null);
   const activeCats = progress.activeCats?.length ? progress.activeCats : CATS.map(c => c.id);
   const [questions, setQuestions] = useState([]);
   const [qIdx, setQIdx] = useState(0);
@@ -178,11 +188,28 @@ export default function App() {
   useEffect(() => {
     if (screen === "results" && results.length > 0 && !roundCounted.current) {
       roundCounted.current = true;
-      const isMastery = roundModeRef.current === "mastery";
+      const mode = roundModeRef.current;
+      const isMastery = mode === "mastery";
+      const isBigCheck = mode === "bigcheck";
       const size = results.length || roundSizeRef.current;
       const pct = Math.round((results.filter(r => r.isCorrect).length / size) * 100);
 
-      if (isMastery) {
+      if (isBigCheck) {
+        finishRound(0);
+        // Proběhlá jen po všech 36; přerušení appky sem nedojde (stav quizu je jen v paměti).
+        const evaluation = evaluateBigCheck(results);
+        setBigCheckResult(evaluation);
+        Promise.resolve(masteryRef.current.completeBigCheck(results)).then((outcome) => {
+          if (outcome?.completed && outcome.evaluation?.success) {
+            addCoins(MASTERY_CONFIG.bigCheckCoins);
+            setRoundCoins(co => co + MASTERY_CONFIG.bigCheckCoins);
+            endSession();
+          } else {
+            discardSession();
+          }
+        });
+      } else if (isMastery) {
+        setBigCheckResult(null);
         finishRound(0);
         const ok = isRoundSuccessful(results);
         if (ok) {
@@ -192,6 +219,7 @@ export default function App() {
           discardSession();
         }
       } else {
+        setBigCheckResult(null);
         finishRound(activeCats.length >= 2 ? 15 : 0);
         if (pct > 80) {
           endSession();
@@ -202,7 +230,12 @@ export default function App() {
 
       if (soundOn) {
         setTimeout(() => {
-          const great = isMastery ? pct >= MASTERY_CONFIG.successPct : pct >= 80;
+          const bigEval = isBigCheck ? evaluateBigCheck(results) : null;
+          const great = isBigCheck
+            ? !!bigEval?.success
+            : isMastery
+              ? pct >= MASTERY_CONFIG.successPct
+              : pct >= 80;
           if (great) playResultGreat();
           else if (pct >= 50) playResultOk();
           else playResultBad();
@@ -397,6 +430,7 @@ export default function App() {
     roundCounted.current = false;
     roundModeRef.current = mode;
     setRoundMode(mode);
+    setBigCheckResult(null);
     roundSizeRef.current = qs.length;
     setQuestions(qs);
     setQIdx(0);
@@ -420,6 +454,10 @@ export default function App() {
 
   const startMasteryRound = () => {
     beginQuiz(generateMasteryRound(mastery.entries), "mastery");
+  };
+
+  const startBigCheck = () => {
+    beginQuiz(generateBigCheckRound(mastery.entries), "bigcheck");
   };
 
   const toggleCat = (id) => {
@@ -726,8 +764,11 @@ export default function App() {
             showBigCelebration={mastery.showBigCelebration}
             celebrationKind={mastery.celebrationKind}
             celebrationMessage={mastery.celebrationMessage}
+            offerBigCheck={mastery.offerBigCheck}
+            hasFinalistBadge={mastery.hasFinalistBadge}
             fixToast={fixToast}
             onStartRound={startMasteryRound}
+            onStartBigCheck={startBigCheck}
             onBack={() => setScreen("dashboard")}
             onDismissCelebration={(kind) => mastery.markCelebrationSeen(kind)}
           />
@@ -740,7 +781,9 @@ export default function App() {
 
   if (screen === "quiz" && q) {
     const catFromReg = getCategory(q.category);
-    const catMeta = q.mastery
+    const catMeta = q.bigCheck
+      ? { id: "nasobilka-bigcheck", icon: "🏁", color: "#FBBF24", label: "Velká kontrola" }
+      : q.mastery
       ? { id: "nasobilka-mastery", icon: "🏆", color: "#EAB308", label: "Mistr násobilky" }
       : (CATS.find(c => c.id === q.category) || {
           id: q.category,
@@ -1006,13 +1049,25 @@ export default function App() {
 
   if (screen === "results") {
     const isMastery = roundMode === "mastery";
+    const isBigCheck = roundMode === "bigcheck";
     const size = results.length || roundSizeRef.current;
     const correct = results.filter(r => r.isCorrect).length;
     const pct = Math.round((correct / size) * 100);
     const mistakes = results.filter(r => !r.isCorrect);
     const masteryOk = isMastery && isRoundSuccessful(results);
+    const bigEval = isBigCheck
+      ? (bigCheckResult || evaluateBigCheck(results))
+      : null;
     let emoji = "🎉", msg = "Fantastické kolo!";
-    if (isMastery) {
+    if (isBigCheck) {
+      if (bigEval?.success) {
+        emoji = "🏁";
+        msg = `Odznak: ${MASTERY_CONFIG.finalistBadgeName}`;
+      } else {
+        emoji = "💪";
+        msg = MASTERY_CONFIG.bigCheckFailMessage;
+      }
+    } else if (isMastery) {
       if (masteryOk) {
         emoji = pct === 100 ? "🎉" : "🌟";
         msg = pct === 100 ? "Mistrovské kolo!" : "Úspěšné kolo (≥90 %)!";
@@ -1027,8 +1082,9 @@ export default function App() {
       else if (pct < 100) { emoji = "🌟"; msg = "Skvělý výkon!"; }
     }
 
-    const mixBonus = !isMastery && activeCats.length >= 2 ? 15 : 0;
+    const mixBonus = !isMastery && !isBigCheck && activeCats.length >= 2 ? 15 : 0;
     const totalCoins = roundCoins + mixBonus;
+    const backToMastery = isMastery || isBigCheck;
 
     return (
       <div style={bgStyle}>
@@ -1042,6 +1098,11 @@ export default function App() {
               background: "linear-gradient(135deg,#FFD166,#FF6B35 50%,#EF476F)",
               WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
             }}>{msg}</div>
+            {isBigCheck && bigEval?.success && (
+              <div style={{ marginTop: 10, fontSize: 15, fontWeight: 700, color: "#E8ECF4" }}>
+                {MASTERY_CONFIG.bigCheckSuccessMessage}
+              </div>
+            )}
           </div>
 
           <div style={{
@@ -1056,7 +1117,10 @@ export default function App() {
               background: "linear-gradient(135deg,#FFD166,#FF6B35)",
               WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
             }}>{pct}%</div>
-            <div style={{ fontSize: 14, color: "#8892A8", marginTop: 4 }}>{correct} z {size} správně</div>
+            <div style={{ fontSize: 14, color: "#8892A8", marginTop: 4 }}>
+              {correct} z {size} správně
+              {isBigCheck ? ` · ${bigEval?.errors ?? mistakes.length} chyb` : ""}
+            </div>
             {isMastery && (
               <div style={{
                 marginTop: 10, fontSize: 13, fontWeight: 700,
@@ -1065,6 +1129,13 @@ export default function App() {
                 {masteryOk
                   ? `✓ Počítá se do denního cíle (${mastery.dailySuccessful} / ${mastery.dailyGoal})`
                   : "✗ Do denního cíle se nepočítá"}
+              </div>
+            )}
+            {isBigCheck && (
+              <div style={{
+                marginTop: 10, fontSize: 13, fontWeight: 700, color: "#4ADE80",
+              }}>
+                ✓ Splněný denní cíl ({mastery.dailySuccessful} / {mastery.dailyGoal})
               </div>
             )}
             <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 16 }}>
@@ -1085,7 +1156,9 @@ export default function App() {
           {mistakes.length > 0 && (
             <div style={{ animation: "slideUp .4s ease .2s both" }}>
               <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12, color: "#F87171" }}>
-                📝 K procvičení ({mistakes.length})
+                {isBigCheck
+                  ? `📝 Tyhle si zopakuj (${mistakes.length})`
+                  : `📝 K procvičení (${mistakes.length})`}
               </div>
               {mistakes.map((m, i) => (
                 <div key={i} style={{
@@ -1114,7 +1187,7 @@ export default function App() {
 
           <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
             <button
-              onClick={() => setScreen(isMastery ? "mastery" : "dashboard")}
+              onClick={() => setScreen(backToMastery ? "mastery" : "dashboard")}
               style={{
                 ...glass,
                 flex: 1, padding: 16, borderRadius: 18,
@@ -1122,18 +1195,20 @@ export default function App() {
                 color: "#E8ECF4",
               }}
             >🏠 Zpět</button>
-            <button
-              onClick={isMastery ? startMasteryRound : startRound}
-              style={{
-                ...glass,
-                flex: 1, padding: 16, borderRadius: 18,
-                fontSize: 16, fontWeight: 800, cursor: "pointer",
-                background: "linear-gradient(135deg,rgba(255,209,102,.2),rgba(255,107,53,.15))",
-                border: "1px solid rgba(255,209,102,.3)",
-                color: "#FFD166",
-                boxShadow: "0 4px 24px rgba(255,107,53,.15), inset 0 1px 0 rgba(255,255,255,.15)",
-              }}
-            >🔄 Další kolo</button>
+            {!isBigCheck && (
+              <button
+                onClick={isMastery ? startMasteryRound : startRound}
+                style={{
+                  ...glass,
+                  flex: 1, padding: 16, borderRadius: 18,
+                  fontSize: 16, fontWeight: 800, cursor: "pointer",
+                  background: "linear-gradient(135deg,rgba(255,209,102,.2),rgba(255,107,53,.15))",
+                  border: "1px solid rgba(255,209,102,.3)",
+                  color: "#FFD166",
+                  boxShadow: "0 4px 24px rgba(255,107,53,.15), inset 0 1px 0 rgba(255,255,255,.15)",
+                }}
+              >🔄 Další kolo</button>
+            )}
           </div>
         </div>
       </div>

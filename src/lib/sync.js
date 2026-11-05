@@ -258,3 +258,59 @@ export async function incrementNasobilkaKola(datum) {
     return null
   }
 }
+
+/** null = chyba / nepřihlášen; objekt = výsledek; undefined-like přes null když řádek chybí → { done: false }. */
+export async function fetchNasobilkaVelkaKontrola(userId) {
+  if (!userId) return { done: false }
+  try {
+    const { data, error } = await supabase
+      .from(TABLES.nasobilkaVelkaKontrola)
+      .select('datum, chyb, uspech, dokonceno_at')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (error) {
+      console.warn('Načtení st_nasobilka_velka_kontrola selhalo:', error.message)
+      return null
+    }
+    if (!data) return { done: false }
+    return {
+      done: true,
+      datum: data.datum,
+      chyb: data.chyb ?? 0,
+      uspech: !!data.uspech,
+      dokonceno_at: data.dokonceno_at || null,
+    }
+  } catch (err) {
+    console.warn('Načtení st_nasobilka_velka_kontrola selhalo:', err)
+    return null
+  }
+}
+
+/**
+ * Jednorázový zápis výsledku Velké kontroly (on conflict nedělá nic nového).
+ * @param {string} userId
+ * @param {{ datum: string, chyb: number, uspech: boolean }} result
+ */
+export async function upsertNasobilkaVelkaKontrola(userId, result) {
+  if (!userId || !result?.datum) return false
+  try {
+    const { error } = await supabase.from(TABLES.nasobilkaVelkaKontrola).upsert(
+      {
+        user_id: userId,
+        datum: result.datum,
+        chyb: Math.max(0, result.chyb || 0),
+        uspech: !!result.uspech,
+        dokonceno_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id', ignoreDuplicates: true },
+    )
+    if (error) {
+      console.warn('Uložení st_nasobilka_velka_kontrola selhalo:', error.message)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.warn('Uložení st_nasobilka_velka_kontrola selhalo:', err)
+    return false
+  }
+}

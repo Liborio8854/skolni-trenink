@@ -8,6 +8,10 @@ import {
   progressPct,
   countGoalDays,
   getRewardProgress,
+  shouldOfferBigCheck,
+  shouldMarkBigCheckDone,
+  creditDailyAfterBigCheck,
+  evaluateBigCheck,
   MASTERY_CONFIG,
 } from '../data/nasobilkaMastery'
 import { localDateKey } from '../utils/date'
@@ -17,6 +21,8 @@ import {
   fetchNasobilkaDenni,
   fetchNasobilkaDenniAll,
   incrementNasobilkaKola,
+  fetchNasobilkaVelkaKontrola,
+  upsertNasobilkaVelkaKontrola,
 } from '../lib/sync'
 
 const LOCAL_KEY = 'skolni-trenink-nasobilka-mastery'
@@ -43,6 +49,11 @@ function saveLocal(userId, entries, daily) {
       goalDays: daily.goalDays ?? 0,
       tableCelebrationSeen: !!daily.tableCelebrationSeen,
       rewardCelebrationSeen: !!daily.rewardCelebrationSeen,
+      bigCheckDone: !!daily.bigCheckDone,
+      bigCheckDatum: daily.bigCheckDatum || null,
+      bigCheckChyb: daily.bigCheckChyb ?? null,
+      bigCheckUspech: !!daily.bigCheckUspech,
+      finalistCelebrationSeen: !!daily.finalistCelebrationSeen,
       // legacy
       celebrationSeen: !!daily.rewardCelebrationSeen || !!daily.tableCelebrationSeen,
     }))
@@ -76,6 +87,18 @@ export function useNasobilkaMastery(userId) {
     const local = loadLocal(userId)
     return !!local?.rewardCelebrationSeen
   })
+  const [bigCheckDone, setBigCheckDone] = useState(() => !!loadLocal(userId)?.bigCheckDone)
+  const [bigCheckUspech, setBigCheckUspech] = useState(() => !!loadLocal(userId)?.bigCheckUspech)
+  const [bigCheckChyb, setBigCheckChyb] = useState(() => {
+    const v = loadLocal(userId)?.bigCheckChyb
+    return typeof v === 'number' ? v : null
+  })
+  const [bigCheckDatum, setBigCheckDatum] = useState(() => loadLocal(userId)?.bigCheckDatum || null)
+  const [finalistCelebrationSeen, setFinalistCelebrationSeen] = useState(() => {
+    const local = loadLocal(userId)
+    return !!local?.finalistCelebrationSeen
+  })
+  const bigCheckDoneRef = useRef(bigCheckDone)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
@@ -87,14 +110,26 @@ export function useNasobilkaMastery(userId) {
   }, [entries])
 
   useEffect(() => {
+    bigCheckDoneRef.current = bigCheckDone
+  }, [bigCheckDone])
+
+  useEffect(() => {
     saveLocal(userId, entries, {
       count: dailySuccessful,
       date: localDateKey(),
       goalDays,
       tableCelebrationSeen,
       rewardCelebrationSeen,
+      bigCheckDone,
+      bigCheckDatum,
+      bigCheckChyb,
+      bigCheckUspech,
+      finalistCelebrationSeen,
     })
-  }, [entries, dailySuccessful, goalDays, tableCelebrationSeen, rewardCelebrationSeen, userId])
+  }, [
+    entries, dailySuccessful, goalDays, tableCelebrationSeen, rewardCelebrationSeen,
+    bigCheckDone, bigCheckDatum, bigCheckChyb, bigCheckUspech, finalistCelebrationSeen, userId,
+  ])
 
   const syncGoalDaysFromRemote = useCallback(async () => {
     const uid = userIdRef.current
@@ -139,6 +174,20 @@ export function useNasobilkaMastery(userId) {
     await syncGoalDaysFromRemote()
   }, [syncGoalDaysFromRemote])
 
+  const syncBigCheckFromRemote = useCallback(async () => {
+    const uid = userIdRef.current
+    if (!uid) return
+    const remote = await fetchNasobilkaVelkaKontrola(uid)
+    if (remote == null) return // offline
+    if (remote.done) {
+      setBigCheckDone(true)
+      bigCheckDoneRef.current = true
+      setBigCheckUspech(!!remote.uspech)
+      setBigCheckChyb(typeof remote.chyb === 'number' ? remote.chyb : 0)
+      setBigCheckDatum(remote.datum || null)
+    }
+  }, [])
+
   useEffect(() => {
     if (!userId) {
       setLoaded(true)
@@ -154,13 +203,14 @@ export function useNasobilkaMastery(userId) {
         return merged
       })
       await syncDailyFromRemote()
+      await syncBigCheckFromRemote()
       if (!cancelled) setLoaded(true)
     })().catch(err => {
       console.warn('Načtení mastery selhalo:', err)
       if (!cancelled) setLoaded(true)
     })
     return () => { cancelled = true }
-  }, [userId, syncDailyFromRemote])
+  }, [userId, syncDailyFromRemote, syncBigCheckFromRemote])
 
   const recordMasteryAnswer = useCallback((question, { correct, ms }) => {
     if (!question?.masteryKey) return { newlyFixed: false, entry: null }
@@ -205,9 +255,100 @@ export function useNasobilkaMastery(userId) {
     }
   }, [syncGoalDaysFromRemote])
 
+  /**
+   * Dokončení Velké kontroly: jen po všech 36 odpovědích.
+   * Přerušený pokus sem nepatří — bigCheckDone zůstane false, nabídka znovu.
+   * @param {{ isCorrect?: boolean, masteryKey?: string }[]} results
+   * @returns {{ completed: boolean, alreadyDone: boolean, evaluation: object|null, dailySuccessful: number }}
+   */
+  const completeBigCheck = useCallback(async (results) => {
+    const today = localDateKey()
+    const goal = MASTERY_CONFIG.dailyGoalRounds
+
+    if (bigCheckDoneRef.current) {
+      return {
+        completed: false,
+        alreadyDone: true,
+        evaluation: null,
+        dailySuccessful,
+      }
+    }
+
+    // Nedokončené kolo (např. méně než 36) — neoznačovat jako proběhlé
+    if (!shouldMarkBigCheckDone(results, { bigCheckDone: false })) {
+      return {
+        completed: false,
+        alreadyDone: false,
+        evaluation: null,
+        dailySuccessful,
+      }
+    }
+
+    const evaluation = evaluateBigCheck(results)
+    if (!evaluation) {
+      return {
+        completed: false,
+        alreadyDone: false,
+        evaluation: null,
+        dailySuccessful,
+      }
+    }
+
+    bigCheckDoneRef.current = true
+    setBigCheckDone(true)
+    setBigCheckUspech(!!evaluation.success)
+    setBigCheckChyb(evaluation.errors)
+    setBigCheckDatum(today)
+
+    const uid = userIdRef.current
+    if (uid) {
+      await upsertNasobilkaVelkaKontrola(uid, {
+        datum: today,
+        chyb: evaluation.errors,
+        uspech: !!evaluation.success,
+      })
+    }
+
+    // Splněný denní cíl = aspoň 2 úspěšná kola dnes
+    let prev = 0
+    setDailySuccessful(n => {
+      prev = n
+      return creditDailyAfterBigCheck(n, goal)
+    })
+    const target = creditDailyAfterBigCheck(prev, goal)
+    let current = prev
+    if (uid) {
+      const remote = await fetchNasobilkaDenni(uid, today)
+      current = remote == null ? prev : remote
+      while (current < target) {
+        const next = await incrementNasobilkaKola(today)
+        if (next == null) break
+        current = next
+      }
+      setDailySuccessful(Math.max(current, target))
+    }
+
+    if (prev < goal && target >= goal) {
+      const rows = uid ? await fetchNasobilkaDenniAll(uid) : null
+      if (rows == null) {
+        setGoalDays(g => g + 1)
+      } else {
+        await syncGoalDaysFromRemote()
+      }
+    }
+
+    return {
+      completed: true,
+      alreadyDone: false,
+      evaluation,
+      dailySuccessful: Math.max(current, target),
+    }
+  }, [dailySuccessful, syncGoalDaysFromRemote])
+
   const markCelebrationSeen = useCallback((kind) => {
     if (kind === 'reward') setRewardCelebrationSeen(true)
     else if (kind === 'table') setTableCelebrationSeen(true)
+    else if (kind === 'finalist') setFinalistCelebrationSeen(true)
     else {
       setTableCelebrationSeen(true)
       setRewardCelebrationSeen(true)
@@ -220,11 +361,29 @@ export function useNasobilkaMastery(userId) {
     () => getRewardProgress({ fixed, goalDays }),
     [fixed, goalDays],
   )
+  const offerBigCheck = shouldOfferBigCheck({ fixed, bigCheckDone })
+  const hasFinalistBadge = bigCheckDone && bigCheckUspech
 
   const showBigCelebration = (
     (reward.celebrationKind === 'reward' && !rewardCelebrationSeen)
     || (reward.celebrationKind === 'table' && !tableCelebrationSeen && !reward.rewardUnlocked)
+    || (hasFinalistBadge && !finalistCelebrationSeen && !reward.celebrationKind)
   )
+
+  let celebrationKind = null
+  let celebrationMessage = null
+  if (showBigCelebration) {
+    if (reward.celebrationKind === 'reward' && !rewardCelebrationSeen) {
+      celebrationKind = 'reward'
+      celebrationMessage = reward.celebrationMessage
+    } else if (reward.celebrationKind === 'table' && !tableCelebrationSeen && !reward.rewardUnlocked) {
+      celebrationKind = 'table'
+      celebrationMessage = reward.celebrationMessage
+    } else if (hasFinalistBadge && !finalistCelebrationSeen) {
+      celebrationKind = 'finalist'
+      celebrationMessage = MASTERY_CONFIG.bigCheckSuccessMessage
+    }
+  }
 
   return {
     entries,
@@ -239,11 +398,17 @@ export function useNasobilkaMastery(userId) {
     daysMet: reward.daysMet,
     rewardUnlocked: reward.rewardUnlocked,
     daysRemaining: reward.daysRemaining,
-    celebrationKind: showBigCelebration ? reward.celebrationKind : null,
-    celebrationMessage: showBigCelebration ? reward.celebrationMessage : null,
+    celebrationKind,
+    celebrationMessage,
     showBigCelebration,
+    offerBigCheck,
+    bigCheckDone,
+    bigCheckUspech,
+    bigCheckChyb,
+    hasFinalistBadge,
     recordMasteryAnswer,
     recordSuccessfulRound,
+    completeBigCheck,
     markCelebrationSeen,
     refreshDaily: syncDailyFromRemote,
   }

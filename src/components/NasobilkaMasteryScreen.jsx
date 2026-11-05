@@ -26,12 +26,21 @@ export default function NasobilkaMasteryScreen({
   showBigCelebration,
   celebrationKind,
   celebrationMessage,
+  offerBigCheck,
+  hasFinalistBadge,
   fixToast,
   onStartRound,
+  onStartBigCheck,
   onBack,
   onDismissCelebration,
 }) {
   const goalDaysPct = Math.min(100, Math.round((goalDays / requiredGoalDays) * 100))
+
+  const badgeTitle = celebrationKind === 'finalist'
+    ? `Odznak: ${MASTERY_CONFIG.finalistBadgeName}`
+    : `Odznak: ${MASTERY_CONFIG.badgeName}`
+  const badgeEmoji = celebrationKind === 'reward' ? '🎁'
+    : celebrationKind === 'finalist' ? '🏁' : '🏆'
 
   return (
     <div>
@@ -46,16 +55,14 @@ export default function NasobilkaMasteryScreen({
         }}>
           <ConfettiBurst />
           <div style={{ fontSize: 64, marginBottom: 12 }}>
-            {celebrationKind === 'reward' ? '🎁' : '🏆'}
+            {badgeEmoji}
           </div>
           <div style={{
             fontSize: 28, fontWeight: 900, marginBottom: 8,
             background: 'linear-gradient(135deg,#FFD166,#FF6B35 50%,#EF476F)',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
           }}>
-            {celebrationKind === 'reward'
-              ? `Odznak: ${MASTERY_CONFIG.badgeName}`
-              : `Odznak: ${MASTERY_CONFIG.badgeName}`}
+            {badgeTitle}
           </div>
           <div style={{
             fontSize: 16, fontWeight: 700, color: '#E8ECF4',
@@ -252,6 +259,15 @@ export default function NasobilkaMasteryScreen({
         </div>
       </div>
 
+      {hasFinalistBadge && (
+        <div style={{
+          textAlign: 'center', marginBottom: 12, fontSize: 14, fontWeight: 800,
+          color: '#FBBF24',
+        }}>
+          🏁 Odznak {MASTERY_CONFIG.finalistBadgeName}
+        </div>
+      )}
+
       {allFixed && (
         <div style={{
           textAlign: 'center', marginBottom: 16, fontSize: 14, fontWeight: 800,
@@ -263,21 +279,56 @@ export default function NasobilkaMasteryScreen({
         </div>
       )}
 
-      <button
-        onClick={onStartRound}
-        style={{
-          width: '100%', padding: 18, borderRadius: 18,
-          border: '1px solid rgba(255,209,102,.35)',
-          fontSize: 18, fontWeight: 900, cursor: 'pointer',
-          background: 'linear-gradient(135deg,rgba(234,179,8,.25),rgba(255,107,53,.15))',
-          color: '#FFD166',
-          boxShadow: '0 4px 24px rgba(234,179,8,.2), inset 0 1px 0 rgba(255,255,255,.15)',
-          letterSpacing: 0.5,
-          backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-        }}
-      >
-        Začít kolo
-      </button>
+      {offerBigCheck ? (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{
+            ...glassStrong,
+            borderRadius: 18, padding: '16px 18px', marginBottom: 12,
+            textAlign: 'center',
+            border: '1px solid rgba(251,191,36,.45)',
+            boxShadow: '0 0 24px rgba(251,191,36,.2)',
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#E8ECF4', lineHeight: 1.45 }}>
+              {MASTERY_CONFIG.bigCheckIntro}
+            </div>
+            <div style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: '#8892A8' }}>
+              Všech {MASTERY_CONFIG.totalExamples} příkladů · max. {MASTERY_CONFIG.bigCheckMaxErrors} chyby
+            </div>
+          </div>
+          <button
+            onClick={onStartBigCheck}
+            style={{
+              width: '100%', padding: 20, borderRadius: 18,
+              border: '1px solid rgba(251,191,36,.55)',
+              fontSize: 20, fontWeight: 900, cursor: 'pointer',
+              background: 'linear-gradient(135deg,rgba(251,191,36,.4),rgba(239,68,68,.25))',
+              color: '#FFF7ED',
+              boxShadow: '0 6px 28px rgba(251,191,36,.35), inset 0 1px 0 rgba(255,255,255,.2)',
+              letterSpacing: 0.5,
+              backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+              animation: 'pulse 2s ease infinite',
+            }}
+          >
+            🏁 Velká kontrola
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={onStartRound}
+          style={{
+            width: '100%', padding: 18, borderRadius: 18,
+            border: '1px solid rgba(255,209,102,.35)',
+            fontSize: 18, fontWeight: 900, cursor: 'pointer',
+            background: 'linear-gradient(135deg,rgba(234,179,8,.25),rgba(255,107,53,.15))',
+            color: '#FFD166',
+            boxShadow: '0 4px 24px rgba(234,179,8,.2), inset 0 1px 0 rgba(255,255,255,.15)',
+            letterSpacing: 0.5,
+            backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+          }}
+        >
+          Začít kolo
+        </button>
+      )}
     </div>
   )
 }

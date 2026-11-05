@@ -9,6 +9,12 @@ import {
   allMultiplicationProducts,
   allMasteryPairs,
   generateMasteryRound,
+  generateBigCheckRound,
+  shouldOfferBigCheck,
+  shouldMarkBigCheckDone,
+  isBigCheckFullyAnswered,
+  creditDailyAfterBigCheck,
+  evaluateBigCheck,
   applyMasteryAnswer,
   emptyEntry,
   ensureEntries,
@@ -400,6 +406,124 @@ assert(MASTERY_CONFIG.requiredGoalDays === 15, `requiredGoalDays expected 15, go
     }
     const qs = generateMasteryRound(map, now)
     assert(qs.length === MASTERY_CONFIG.roundSize, 'no-stale round still size 10')
+  }
+}
+
+// Velká kontrola: práh, jednorázovost, 36 unikátních, denní cíl
+{
+  assert(MASTERY_CONFIG.bigCheckThreshold === 32, 'default threshold 32')
+  assert(MASTERY_CONFIG.bigCheckMaxErrors === 2, 'max 2 errors')
+  assert(MASTERY_CONFIG.bigCheckCoins === 100, '+100 coins')
+  assert(MASTERY_CONFIG.finalistBadgeName === 'Finalista', 'Finalista badge')
+
+  // Spuštění na prahu
+  assert(shouldOfferBigCheck({ fixed: 31, bigCheckDone: false }) === false, '31 fixed → no offer')
+  assert(shouldOfferBigCheck({ fixed: 32, bigCheckDone: false }) === true, '32 fixed → offer')
+  assert(shouldOfferBigCheck({ fixed: 36, bigCheckDone: false }) === true, '36 fixed → offer')
+
+  // Jednorázovost
+  assert(shouldOfferBigCheck({ fixed: 36, bigCheckDone: true }) === false, 'done → never again')
+  assert(shouldOfferBigCheck({ fixed: 32, bigCheckDone: true }) === false, 'done at threshold → no')
+
+  // 36 unikátních příkladů (všech 36 klíčů, každý jednou)
+  {
+    const qs = generateBigCheckRound({})
+    assert(qs.length === MASTERY_CONFIG.totalExamples, `expected 36, got ${qs.length}`)
+    const keys = qs.map(q => q.masteryKey)
+    assert(new Set(keys).size === 36, 'all masteryKeys unique')
+    const expected = new Set(allMasteryPairs().map(p => p.key))
+    assert(keys.every(k => expected.has(k)), 'only valid pairs')
+    assert(expected.size === keys.length && keys.every(k => expected.has(k)), 'covers all 36 pairs')
+    assert(qs.every(q => q.bigCheck === true && q.mastery === true), 'flags bigCheck+mastery')
+    assert(qs.every(q => q.timeLimit === MASTERY_CONFIG.timeLimit), '6 s limit')
+    // Náhodné pořadí: aspoň někdy jiné než kanonické a≤b (mimo čtverce)
+    let sawSwapped = false
+    for (let t = 0; t < 20 && !sawSwapped; t++) {
+      for (const q of generateBigCheckRound({})) {
+        const [lo, hi] = q.masteryKey.split('×').map(Number)
+        if (lo !== hi && q.shownA === hi && q.shownB === lo) {
+          sawSwapped = true
+          break
+        }
+      }
+    }
+    assert(sawSwapped, 'factor order should sometimes be swapped')
+  }
+
+  // Započtení denního cíle (2 úspěšná kola)
+  assert(creditDailyAfterBigCheck(0) === 2, '0 → 2')
+  assert(creditDailyAfterBigCheck(1) === 2, '1 → 2')
+  assert(creditDailyAfterBigCheck(2) === 2, '2 → 2')
+  assert(creditDailyAfterBigCheck(3) === 3, '3 stays 3')
+  assert(
+    creditDailyAfterBigCheck(0, MASTERY_CONFIG.dailyGoalRounds) === MASTERY_CONFIG.dailyGoalRounds,
+    'grant equals dailyGoalRounds',
+  )
+
+  // Vyhodnocení: ≤2 chyby = úspěch (jen při plných 36)
+  {
+    const ok = evaluateBigCheck(Array.from({ length: 36 }, (_, i) => ({
+      isCorrect: i >= 2,
+      masteryKey: `k${i}`,
+      display: `${i}`,
+    })))
+    assert(ok && ok.success === true && ok.errors === 2, '2 errors → success')
+    assert(ok.coins === 100 && ok.badgeName === 'Finalista', 'success rewards')
+
+    const fail = evaluateBigCheck(Array.from({ length: 36 }, (_, i) => ({
+      isCorrect: i >= 3,
+      masteryKey: `k${i}`,
+      display: `${i}`,
+    })))
+    assert(fail && fail.success === false && fail.errors === 3, '3 errors → fail')
+    assert(fail.coins === 0 && fail.badgeName === null, 'no success rewards')
+    assert(fail.mistakes.length === 3, 'mistake list')
+  }
+
+  // Přerušení: nedokončená kontrola se NEOZNAČÍ jako proběhlá → nabídne se znovu
+  {
+    const pairs = allMasteryPairs()
+    const partial = pairs.slice(0, 10).map((p, i) => ({
+      isCorrect: i !== 0,
+      masteryKey: p.key,
+      display: p.key,
+    }))
+    assert(isBigCheckFullyAnswered(partial) === false, '10 answers ≠ fully answered')
+    assert(isBigCheckFullyAnswered([]) === false, 'empty ≠ fully answered')
+    assert(isBigCheckFullyAnswered(null) === false, 'null ≠ fully answered')
+    assert(
+      shouldMarkBigCheckDone(partial, { bigCheckDone: false }) === false,
+      'interrupted attempt must not mark done',
+    )
+    assert(
+      shouldOfferBigCheck({ fixed: 32, bigCheckDone: false }) === true,
+      'after interrupt, still offered (bigCheckDone stays false)',
+    )
+    assert(evaluateBigCheck(partial) === null, 'partial → no evaluation / no rewards')
+
+    // Duplikáty místo 36 unikátních
+    const dupes = Array.from({ length: 36 }, () => ({
+      isCorrect: true,
+      masteryKey: '2×2',
+    }))
+    assert(isBigCheckFullyAnswered(dupes) === false, '36 with duplicate keys ≠ complete')
+    assert(shouldMarkBigCheckDone(dupes, { bigCheckDone: false }) === false, 'dupes not done')
+
+    // Plných 36 unikátních → smí se označit
+    const full = pairs.map((p, i) => ({
+      isCorrect: i !== 0,
+      masteryKey: p.key,
+      display: p.key,
+    }))
+    assert(isBigCheckFullyAnswered(full) === true, '36 unique → fully answered')
+    assert(
+      shouldMarkBigCheckDone(full, { bigCheckDone: false }) === true,
+      'full round may mark done',
+    )
+    assert(
+      shouldMarkBigCheckDone(full, { bigCheckDone: true }) === false,
+      'already done → do not mark again',
+    )
   }
 }
 

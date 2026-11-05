@@ -18,4 +18,5 @@ export const TABLES = {
   errorLog: 'st_error_log',
   nasobilkaMastery: 'st_nasobilka_mastery',
   nasobilkaDenni: 'st_nasobilka_denni',
+  nasobilkaVelkaKontrola: 'st_nasobilka_velka_kontrola',
 }

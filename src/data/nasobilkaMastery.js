@@ -16,6 +16,14 @@ export const MASTERY_CONFIG = {
   /** Min. počet různých dní s bleskem pro zafixování. */
   fixMinDays: 3,
   totalExamples: 36,
+  /** Jednorázová Velká kontrola: práh zafixovaných, max. chyby, odměna. */
+  bigCheckThreshold: 32,
+  bigCheckMaxErrors: 2,
+  bigCheckCoins: 100,
+  finalistBadgeName: 'Finalista',
+  bigCheckIntro: 'Jsi skoro v cíli! Ukaž, že umíš všech 36.',
+  bigCheckFailMessage: 'Nevadí — tyhle si zopakuj a zkus to znovu v běžných kolech.',
+  bigCheckSuccessMessage: 'Paráda! Zvládl jsi Velkou kontrolu.',
 }
 
 /**
@@ -26,6 +34,72 @@ export const MASTERY_CONFIG = {
 export function countGoalDays(rows, dailyGoal = MASTERY_CONFIG.dailyGoalRounds) {
   if (!Array.isArray(rows)) return 0
   return rows.filter(r => (r?.uspesna_kola || 0) >= dailyGoal).length
+}
+
+/**
+ * Nabídnout Velkou kontrolu? Práh zafixovaných a ještě neproběhla.
+ * @param {{ fixed: number, bigCheckDone?: boolean }}
+ */
+export function shouldOfferBigCheck({ fixed, bigCheckDone }) {
+  if (bigCheckDone) return false
+  return (fixed || 0) >= MASTERY_CONFIG.bigCheckThreshold
+}
+
+/**
+ * Kontrola je „zodpovězená celá“ jen při všech 36 unikátních příkladech.
+ * Přerušený pokus (zavření appky) sem nedojde → příště nabídka od začátku.
+ * @param {{ masteryKey?: string }[]} results
+ */
+export function isBigCheckFullyAnswered(results) {
+  if (!Array.isArray(results) || results.length !== MASTERY_CONFIG.totalExamples) {
+    return false
+  }
+  const keys = results.map(r => r?.masteryKey).filter(Boolean)
+  return new Set(keys).size === MASTERY_CONFIG.totalExamples
+}
+
+/**
+ * Smí se označit jako proběhlá? Jen po plném kole a pokud ještě neproběhla.
+ * @param {{ masteryKey?: string }[]} results
+ * @param {{ bigCheckDone?: boolean }} [state]
+ */
+export function shouldMarkBigCheckDone(results, { bigCheckDone } = {}) {
+  if (bigCheckDone) return false
+  return isBigCheckFullyAnswered(results)
+}
+
+/**
+ * Dokončená Velká kontrola = splněný denní cíl (2 úspěšná kola).
+ * @param {number} currentDaily
+ * @param {number} [grant]
+ */
+export function creditDailyAfterBigCheck(
+  currentDaily,
+  grant = MASTERY_CONFIG.dailyGoalRounds,
+) {
+  return Math.max(currentDaily || 0, grant)
+}
+
+/**
+ * Vyhodnocení Velké kontroly (max. 2 chyby = úspěch).
+ * Volat až po isBigCheckFullyAnswered — jinak null.
+ * @param {{ isCorrect?: boolean, masteryKey?: string, display?: string }[]} results
+ */
+export function evaluateBigCheck(results) {
+  if (!isBigCheckFullyAnswered(results)) return null
+  const mistakes = results.filter(r => !r.isCorrect)
+  const errors = mistakes.length
+  const success = errors <= MASTERY_CONFIG.bigCheckMaxErrors
+  return {
+    errors,
+    success,
+    mistakes,
+    coins: success ? MASTERY_CONFIG.bigCheckCoins : 0,
+    badgeName: success ? MASTERY_CONFIG.finalistBadgeName : null,
+    message: success
+      ? MASTERY_CONFIG.bigCheckSuccessMessage
+      : MASTERY_CONFIG.bigCheckFailMessage,
+  }
 }
 
 /**
@@ -425,6 +499,46 @@ function takeWeightedFrom(remaining, candidates, weightFn) {
   return pick
 }
 
+/** Náhodné pořadí činitelů (pro Velkou kontrolu). */
+export function randomDisplayOrder(a, b) {
+  if (a === b) return { shownA: a, shownB: b }
+  if (Math.random() < 0.5) return { shownA: a, shownB: b }
+  return { shownA: b, shownB: a }
+}
+
+function toMasteryQuestion({ a, b, key, entry, idPrefix, orderFn, bigCheck = false }) {
+  const { shownA, shownB } = orderFn(entry, a, b)
+  const answer = shownA * shownB
+  const opts = masteryDistractors(shownA, shownB)
+  const options = opts.map(String)
+  const correctIdx = opts.indexOf(answer)
+  const display = `${shownA} × ${shownB}`
+  return {
+    id: `${idPrefix}:${key}:${shownA}x${shownB}`,
+    type: 'vyber',
+    category: 'nasobilka',
+    subject: 'matematika',
+    points: 1,
+    mastery: true,
+    bigCheck: !!bigCheck,
+    masteryKey: key,
+    shownA,
+    shownB,
+    display,
+    options,
+    correctIdx,
+    correct: String(answer),
+    timeLimit: MASTERY_CONFIG.timeLimit,
+    payload: {
+      prompt: display,
+      options: options.map((text, i) => ({ id: String(i), text })),
+      correctOptionId: String(correctIdx),
+    },
+    explanation: null,
+    sourceText: null,
+  }
+}
+
 /**
  * Vážený výběr 10 příkladů bez opakování.
  * Zafixované: váha roste se stářím (aktualizovano). Do kola jde aspoň
@@ -460,37 +574,32 @@ export function generateMasteryRound(entriesMap, now = new Date()) {
     selected.push(takeWeightedFrom(remaining, remaining, weightFn))
   }
 
-  return selected.map(({ a, b, key, entry }) => {
-    const { shownA, shownB } = chooseDisplayOrder(entry, a, b)
-    const answer = shownA * shownB
-    const opts = masteryDistractors(shownA, shownB)
-    const options = opts.map(String)
-    const correctIdx = opts.indexOf(answer)
-    const display = `${shownA} × ${shownB}`
-    return {
-      id: `nasobilka-mastery:${key}:${shownA}x${shownB}`,
-      type: 'vyber',
-      category: 'nasobilka',
-      subject: 'matematika',
-      points: 1,
-      mastery: true,
-      masteryKey: key,
-      shownA,
-      shownB,
-      display,
-      options,
-      correctIdx,
-      correct: String(answer),
-      timeLimit: MASTERY_CONFIG.timeLimit,
-      payload: {
-        prompt: display,
-        options: options.map((text, i) => ({ id: String(i), text })),
-        correctOptionId: String(correctIdx),
-      },
-      explanation: null,
-      sourceText: null,
-    }
-  })
+  return selected.map(({ a, b, key, entry }) => toMasteryQuestion({
+    a, b, key, entry,
+    idPrefix: 'nasobilka-mastery',
+    orderFn: (e, x, y) => chooseDisplayOrder(e, x, y),
+  }))
+}
+
+/**
+ * Jednorázová Velká kontrola: všech 36 příkladů, každý jednou,
+ * náhodné pořadí i pořadí činitelů. Limit/blesk stejné jako mastery.
+ * @param {object} [entriesMap]
+ * @returns {object[]}
+ */
+export function generateBigCheckRound(entriesMap) {
+  const entries = ensureEntries(entriesMap)
+  const pool = shuffleInPlace(allMasteryPairs().map(p => ({
+    ...p,
+    entry: entries[p.key] || emptyEntry(p.key),
+  })))
+
+  return pool.map(({ a, b, key, entry }) => toMasteryQuestion({
+    a, b, key, entry,
+    idPrefix: 'nasobilka-bigcheck',
+    bigCheck: true,
+    orderFn: (_e, x, y) => randomDisplayOrder(x, y),
+  }))
 }
 
 export function countByState(entriesMap) {
